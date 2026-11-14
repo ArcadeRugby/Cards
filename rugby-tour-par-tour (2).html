@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rugby – prototype tour par tour</title>
+<style>
+:root{--bg:#16262a;--card:#f3efe4;--ink:#1b2326;--blue:#2f6fe4;--red:#d9473b;--pitch:#3d8c4b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#e9efe9;font:15px/1.4 system-ui,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:12px;display:grid;gap:14px;grid-template-columns:minmax(260px,420px) 1fr;align-items:start}
+@media(max-width:780px){main{grid-template-columns:1fr}}
+header{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font:700 20px Georgia,serif;margin:0}
+.score{font:700 22px Georgia,serif}.me{color:#7fb0ff}.ai{color:#ff8a7e}
+canvas{width:100%;aspect-ratio:1;border-radius:6px;display:block}
+.duel{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:var(--card);color:var(--ink);border-radius:8px;padding:10px;border-top:6px solid #999}
+.card.me{border-color:var(--blue)}.card.ai{border-color:var(--red)}
+.card h2{font:700 17px Georgia,serif;margin:0}.card small{display:block;opacity:.75}
+.st{display:grid;grid-template-columns:62px 1fr;gap:2px 6px;margin-top:8px;font-size:13px;align-items:center}
+.bar{height:7px;background:#d8d2c2;border-radius:4px}.bar i{display:block;height:100%;background:#2b4a4f;border-radius:4px}
+.sp{margin-top:8px;font-size:13px;font-weight:600}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+button{font:600 15px system-ui;padding:12px 8px;border:0;border-radius:8px;background:#e8e1cf;color:var(--ink);cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+button:hover:not(:disabled){background:#fff}button:focus-visible{outline:3px solid #ffd166}button:disabled{opacity:.5;cursor:default}
+button b{font-variant-numeric:tabular-nums}
+.info{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;font-size:13px}
+.tag{background:#27403f;border-radius:12px;padding:3px 10px}.tag.warn{background:#7a3a1f}
+#log{margin-top:10px;min-height:4.2em;font-size:14px}
+#hint{font-size:13px;opacity:.8;margin-top:6px}
+</style></head><body><main>
+<header><h1>Rugby – tour par tour</h1><div class="score"><span class="me">Toi <span id="sm">0</span></span> – <span class="ai"><span id="sa">0</span> Adversaire</span></div></header>
+<canvas id="cv" width="420" height="420" aria-label="Terrain"></canvas>
+<section>
+<div class="info"><span class="tag" id="t-half"></span><span class="tag" id="t-zone"></span><span class="tag" id="t-state"></span></div>
+<div class="duel" style="margin-top:10px"><div id="c1"></div><div id="c2"></div></div>
+<div id="hint"></div><div class="acts" id="acts"></div><div id="log"></div>
+</section></main>
+<script>
+/* ====== DONNÉES (modifie ici pour changer le gameplay) ====== */
+const STATS={f:'Force',v:'Vitesse',p:'Passe',k:'Pied',d:'Défense'};
+const POSTES=[ // n°, poste, stats, spécialité
+[1,'Pilier',{f:8,v:3,p:3,k:2,d:7},'Percuter'],[2,'Talonneur',{f:7,v:4,p:4,k:2,d:7},'Percuter'],
+[3,'Pilier',{f:8,v:3,p:3,k:2,d:7},'Plaquer'],[4,'Deuxième ligne',{f:7,v:4,p:3,k:2,d:7},'Monter'],
+[5,'Deuxième ligne',{f:7,v:4,p:3,k:2,d:7},'Plaquer'],[6,'Troisième ligne',{f:7,v:5,p:4,k:2,d:7},'Plaquer'],
+[7,'Troisième ligne',{f:6,v:6,p:4,k:2,d:8},'Gratter'],[8,'Numéro 8',{f:8,v:5,p:4,k:2,d:6},'Percuter'],
+[9,'Demi de mêlée',{f:4,v:6,p:9,k:5,d:5},'Passer'],[10,'Ouvreur',{f:4,v:6,p:8,k:9,d:5},'Botter'],
+[11,'Ailier',{f:4,v:9,p:5,k:4,d:5},'Éviter'],[12,'Centre',{f:6,v:7,p:7,k:3,d:7},'Passer'],
+[13,'Centre',{f:6,v:7,p:6,k:3,d:7},'Éviter'],[14,'Ailier',{f:4,v:9,p:5,k:4,d:5},'Éviter'],
+[15,'Arrière',{f:5,v:7,p:6,k:8,d:6},'Botter']];
+const ATT={Percuter:{s:'f',b:55,g:[3,8]},Éviter:{s:'v',b:45,g:[8,20]},Passer:{s:'p',b:70,g:[5,12]},Botter:{s:'k',b:75,g:[25,40]}};
+const DEF=['Plaquer','Gratter','Monter','Couvrir'];
+const M={Plaquer:{Percuter:-10,Éviter:0,Passer:0,Botter:5},Gratter:{Percuter:-5,Éviter:10,Passer:5,Botter:5},
+Monter:{Percuter:0,Éviter:-10,Passer:-15,Botter:10},Couvrir:{Percuter:5,Éviter:5,Passer:5,Botter:-15}};
+const PAR_MI_TEMPS=20, HOLE_BONUS=15, SPEC_BONUS=12, ECART=4;
+const DEPLACEMENT_MAX=.25, SEUIL_PLACE=.12, MIN_EN_PLACE=10; // déplacement max d'un joueur par action, distance « en place », défenseurs minimum en place
+const ZONES=[[22,'Tes 22 m'],[50,'Ton camp'],[78,'Camp adverse'],[100,'22 m adverses']];
+/* ====== OUTILS ====== */
+const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1)),cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+const pick=w=>{let t=Object.values(w).reduce((a,b)=>a+b,0),r=Math.random()*t;for(const k in w)if((r-=w[k])<0)return k;return Object.keys(w)[0]};
+const shuf=a=>a.map(x=>[Math.random(),x]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
+const PRE=['Léo','Hugo','Théo','Noé','Lucas','Maël','Yanis','Paul','Enzo','Axel','Tom','Jules','Nino','Rémi','Sacha','Ethan','Marius','Gaël','Loïc','Nils'];
+const NOM=['Dupont','Marty','Roux','Faure','Ducasse','Lasserre','Cazaux','Pujol','Barrère','Soulé','Laborde','Camy','Dufau','Larrieu','Sempé','Castex','Lamour','Vidal','Mourgues','Peyret'];
+function team(){const p=shuf(PRE),n=shuf(NOM);return POSTES.map(([num,poste,st,sp],i)=>{const s={};for(const k in st)s[k]=cl(st[k]+R(-1,1),1,10);return{num,poste,st:s,sp,nom:p[i]+' '+n[i]}})}
+/* ====== RÈGLE DE RÉSOLUTION ====== */
+function pAtt(A,D,a,d,hole){const x=ATT[a];return cl(x.b+ECART*(A.st[x.s]-D.st.d)+M[d][a]+(hole?HOLE_BONUS:0)+(A.sp===a?SPEC_BONUS:0)-(D.sp===d?8:0),5,95)}
+const moy=f=>Math.round(Object.keys(ATT).reduce((s,a)=>s+f(a),0)/4);
+/* ====== ÉTAT ====== */
+let S;
+function init(){S={eq:{me:team(),ai:team()},sc:{me:0,ai:0},ball:'me',pos:40,hole:false,n:0,busy:false,end:false,ci:8,di:0,ax:.5,late:false,reset:true};draw();dots.forEach(p=>{const t=slot(p);p.lx=p.x=p.tx=t.x;p.ly=p.y=p.ty=t.y});choose();log('Coup d\'envoi : tu as le ballon.');turn()}
+const other=b=>b==='me'?'ai':'me';
+const dis=()=>S.hole||S.late; // défense désorganisée : trou laissé par une action OU joueurs hors de position
+function choose(passed){
+  const bx=S.ax,by=S.ball==='me'?1-S.pos/100:S.pos/100;
+  const near=(s,ok)=>{const w={};dots.filter(p=>p.s===s&&ok(p.i)).forEach(p=>{const q=S.reset?slot(p):{x:p.lx,y:p.ly};w[p.i]=1/Math.pow(Math.hypot(q.x-bx,q.y-by)+.08,2)});return +pick(w)};
+  const old=S.ci;S.ci=near(S.ball,i=>passed?(i>=8&&i!==old):true);S.di=near(other(S.ball),()=>true)}
+const C=()=>S.eq[S.ball][S.ci],D=()=>S.eq[other(S.ball)][S.di];
+/* ====== AFFICHAGE ====== */
+const $=id=>document.getElementById(id);
+function card(p,side){return `<div class="card ${side}"><h2>${p.nom}</h2><small>n°${p.num} · ${p.poste}</small><div class="st">${Object.keys(STATS).map(k=>`<span>${STATS[k]}</span><div class="bar"><i style="width:${p.st[k]*10}%"></i></div>`).join('')}</div><div class="sp">Spécialité : ${p.sp}</div></div>`}
+function log(t){$('log').textContent=t}
+function turn(){
+  retarget();
+  const me=S.ball==='me',c=C(),d=D(),zp=ZONES.find(z=>S.pos<=z[0])[1];
+  $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
+  $('t-half').textContent=(S.n<PAR_MI_TEMPS?'1re':'2e')+' mi-temps · action '+(S.n%PAR_MI_TEMPS+1)+'/'+PAR_MI_TEMPS;
+  $('t-zone').textContent=(me?'Tu attaques':'Tu défends')+' · '+zp+' · '+(100-S.pos)+' m de l\'en-but';
+  $('t-state').textContent=dis()?'Défense désorganisée':'Défense organisée';$('t-state').className='tag'+(dis()?' warn':'');
+  $('hint').textContent=me?'Tu as le ballon : choisis une action (le % est une moyenne selon la défense adverse).':'L\'adversaire a le ballon : choisis ta défense (le % est l\'efficacité moyenne selon son attaque).';
+  const a=$('acts');a.innerHTML='';
+  if(me)Object.keys(ATT).forEach(k=>add(k,moy(x=>DEF.reduce((s,dd)=>s+pAtt(c,d,k,dd,dis()),0)/4)));
+  else DEF.forEach(k=>add(k,100-moy(x=>pAtt(c,d,x,k,dis()))));
+  function add(k,pct){const b=document.createElement('button');b.innerHTML=`<span>${k}${(me?c:d).sp===k?' ★':''}</span><b>${pct} %</b>`;b.onclick=()=>play(k);a.appendChild(b)}
+}
+/* ====== TOUR DE JEU ====== */
+function play(choice){
+  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
+  const me=S.ball==='me',c=C(),d=D();
+  const a=me?choice:aiAtt(),df=me?aiDef():choice;
+  const prev={s:S.ball,i:S.ci},pd=S.ball==='me'?-1:1,cx=slot({s:S.ball,i:S.ci}).x;
+  const ok=R(1,100)<=pAtt(c,d,a,df,dis());let msg=`${c.nom} : ${a} — la défense joue « ${df} ». `,flip=false,pass=false,gain=0;
+  let nx=cx;if(a==='Botter')nx=R(15,85)/100;else if(ok)nx=cx+(a==='Percuter'?R(-4,4):(Math.random()<.5?-1:1)*R(10,20))/100;S.ax=cl(nx,.06,.94);
+  if(a==='Botter'){gain=ok?R(...ATT.Botter.g):R(5,10);S.pos=Math.min(S.pos+gain,97);msg+=ok?`Beau dégagement de ${gain} m !`:`Coup de pied court (${gain} m).`;flip=true}
+  else if(ok){gain=R(...ATT[a].g);S.pos+=gain;msg+=`Réussi : +${gain} m.`;S.hole=(df==='Gratter'||df==='Monter');if(S.hole)msg+=' La défense est désorganisée !';pass=a==='Passer'}
+  else{S.hole=false;
+    if(a==='Passer'){flip=true;msg+=df==='Monter'?'Interception !':'En-avant, ballon perdu.'}
+    else{const g=R(0,2);S.pos+=g;msg+=`Plaqué (+${g} m).`;
+      if(df==='Gratter'&&R(1,100)<=35+ECART*(d.st.d-c.st.f)+(d.sp==='Gratter'?15:0)){flip=true;msg+=' Ballon gratté, turnover !'}}}
+  const tryNow=!flip&&S.pos>=100,ey=tryNow?(pd<0?.02:.98):(S.ball==='me'?1-S.pos/100:S.pos/100);moveBall(prev,a,S.ax,ey);
+  if(tryNow){S.ax=.5;S.reset=true;const kp=R(1,100)<=40+5*c.st.k;S.sc[S.ball]+=5+(kp?2:0);msg=`${c.nom} : ESSAI ! ${kp?'Transformé (+7).':'Transformation ratée (+5).'}`;S.ball=other(S.ball);S.pos=50;S.hole=false;pass=false;choose()}
+  else if(flip){S.ball=other(S.ball);S.pos=100-S.pos;S.hole=false;choose()}
+  else choose(pass);
+  S.n++;$('sm').textContent=S.sc.me;$('sa').textContent=S.sc.ai;log(msg);
+  if(S.n===PAR_MI_TEMPS){S.ball=other(S.ball);S.pos=50;S.hole=false;S.ax=.5;S.reset=true;choose();log(msg+' — MI-TEMPS : coup d\'envoi pour l\'autre équipe.')}
+  if(S.n>=2*PAR_MI_TEMPS){S.end=true;const r=S.sc.me>S.sc.ai?'Victoire !':S.sc.me<S.sc.ai?'Défaite.':'Match nul.';log(msg+' — FIN DU MATCH : '+r);const b=document.createElement('button');b.textContent='Rejouer';b.onclick=init;$('acts').innerHTML='';$('acts').appendChild(b);return}
+  setTimeout(()=>{S.busy=false;turn()},1300);
+}
+function aiAtt(){const w={Percuter:35,Éviter:20,Passer:30,Botter:15};if(S.pos<25)w.Botter+=35;if(S.pos>75){w.Percuter+=25;w.Botter=0}return pick(w)}
+function aiDef(){return pick({Plaquer:40,Couvrir:20,Monter:20,Gratter:20})}
+/* ====== TERRAIN (points sur un carré vert) ====== */
+const cv=$('cv'),g=cv.getContext('2d');let dots=[],ball={x:.5,y:.5,tx:.5,ty:.5},ring={c:null,d:null};
+function draw(){dots=[];for(const s of['me','ai'])for(let i=0;i<15;i++)dots.push({s,i,x:.5,y:.5,tx:.5,ty:.5,lx:.5,ly:.5,pl:true})}
+/* place « naturelle » de chaque joueur autour du point de jeu (ax = côté du terrain, S.pos = avancée) */
+function slot(p){
+  const att=p.s===S.ball,dA=S.ball==='me'?-1:1,bY=S.ball==='me'?1-S.pos/100:S.pos/100,ax=S.ax,side=ax<.5?1:-1,i=p.i;let x,o;
+  if(i<8){x=ax+((i%4)-1.5)*(att?.07:.08);o=att?-(.02+(i>>2)*.03):.035+(i>>2)*.03}
+  else if(att){const T=[[.04,.025],[.14,.07],[0,.11],[.26,.10],[.38,.13],[0,.11],[0,.25]][i-8];
+    x=i===10?.07:i===13?.93:i===14?.5:ax+T[0]*side;o=-T[1]}
+  else{x=.1+(i-8)/6*.8;o=.07+(i===14?.14:0)}
+  return{x:cl(x,.04,.96),y:cl(bY+dA*o,.02,.98)}}
+/* début de tour : l'équipe se replace, et le ballon va vers le porteur */
+function retarget(){
+  const dA=S.ball==='me'?-1:1,cs=slot({s:S.ball,i:S.ci});
+  dots.forEach(p=>{const t=slot(p);if(p.s!==S.ball&&p.i===S.di){t.x=cs.x;t.y=cs.y+dA*.04}
+    let dx=t.x-p.lx,dy=t.y-p.ly;const d=Math.hypot(dx,dy);
+    if(!S.reset&&d>DEPLACEMENT_MAX){dx*=DEPLACEMENT_MAX/d;dy*=DEPLACEMENT_MAX/d}
+    p.lx+=dx;p.ly+=dy;p.tx=p.lx;p.ty=p.ly;p.pl=S.reset||d-DEPLACEMENT_MAX<SEUIL_PLACE});
+  S.late=dots.filter(p=>p.s!==S.ball&&p.pl).length<MIN_EN_PLACE;S.reset=false;
+  const cd=dots.find(p=>p.s===S.ball&&p.i===S.ci);ball.tx=cd.lx;ball.ty=cd.ly;
+  ring={c:{s:S.ball,i:S.ci},d:{s:other(S.ball),i:S.di}}}
+/* fin d'action : le ballon (et le porteur s'il court) se déplacent vers le nouvel endroit */
+function moveBall(prev,a,x,y){
+  const d=dots.find(p=>p.s===prev.s&&p.i===prev.i);
+  if(d&&(a==='Percuter'||a==='Éviter')){d.tx=d.lx=x;d.ty=d.ly=y}
+  ball.tx=x;ball.ty=y}
+function frame(){
+  const W=cv.width,H=cv.height;g.fillStyle='#3d8c4b';g.fillRect(0,0,W,H);
+  g.strokeStyle='rgba(255,255,255,.55)';g.lineWidth=2;
+  [.05,.22,.5,.78,.95].forEach(y=>{g.beginPath();g.moveTo(0,y*H);g.lineTo(W,y*H);g.stroke()});
+  dots.forEach(p=>{p.x+=(p.tx-p.x)*.1;p.y+=(p.ty-p.y)*.1;
+    g.beginPath();g.arc(p.x*W,p.y*H,7,0,7);g.fillStyle=p.s==='me'?'#2f6fe4':'#d9473b';g.fill();
+    const car=ring.c&&p.s===ring.c.s&&p.i===ring.c.i,def=ring.d&&p.s===ring.d.s&&p.i===ring.d.i;
+    if(car||def){g.lineWidth=3;g.strokeStyle=car?'#fff':'#ffd166';g.beginPath();g.arc(p.x*W,p.y*H,11,0,7);g.stroke()}});
+  ball.x+=(ball.tx-ball.x)*.12;ball.y+=(ball.ty-ball.y)*.12;
+  g.beginPath();g.ellipse(ball.x*W,ball.y*H,6,4,.5,0,7);g.fillStyle='#fff3c4';g.fill();g.lineWidth=1.5;g.strokeStyle='#5a3b1a';g.stroke();
+  requestAnimationFrame(frame)}
+init();frame();
+</script></body></html>
