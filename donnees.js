@@ -16,8 +16,8 @@ const ATT={Percuter:{s:'f',b:55,g:[3,8]},Éviter:{s:'v',b:45,g:[8,20]},Passer:{s
 const DEF=['Plaquer','Gratter','Monter','Couvrir'];
 const M={Plaquer:{Percuter:-10,Éviter:0,Passer:0,Botter:5},Gratter:{Percuter:-5,Éviter:10,Passer:5,Botter:5},
 Monter:{Percuter:0,Éviter:-10,Passer:-15,Botter:10},Couvrir:{Percuter:5,Éviter:5,Passer:5,Botter:-15}};
-let PAR_MI_TEMPS=20;const HOLE_BONUS=15, SPEC_BONUS=12, ECART=4, OPT={pct:true};
-const DEPLACEMENT_MAX=.25, SEUIL_PLACE=.12, MIN_EN_PLACE=10; // déplacement max d'un joueur par action, distance « en place », défenseurs minimum en place
+let PAR_MI_TEMPS=20,HOLE_BONUS=15,SPEC_BONUS=12,ECART=4;const OPT={pct:true};
+let DEPLACEMENT_MAX=.25, SEUIL_PLACE=.12, MIN_EN_PLACE=10; // déplacement max d'un joueur par action, distance « en place », défenseurs minimum en place
 const ZONES=[[22,'Tes 22 m'],[50,'Ton camp'],[78,'Camp adverse'],[100,'22 m adverses']];
 
 /* ====== CARRIÈRE : raretés, boosters, récompenses, pool de joueurs ====== */
@@ -31,4 +31,3 @@ const POOL=(()=>{let a=20260101;const r=()=>{a=(a+0x6D2B79F5)|0;let t=Math.imul(
  POSTES.forEach(([num,poste,st,sp])=>{for(let k=0;k<20;k++){let t=r()*100,rar='commun';for(const q in RARETES)if((t-=RARETES[q].w)<0){rar=q;break}
   const s={};for(const x in st)s[x]=Math.max(1,Math.min(10,st[x]+ri(-1,1)+RARETES[rar].b));
   out.push({id:'j'+(++id),nom:pk(PRE)+' '+pk(NOM),num,poste,st:s,sp:r()<RARETES[rar].sp?pk(TOUS):sp,rar})}});return out})(); // 300 joueurs, toujours les mêmes
-const MALUS_HORS_POSTE=2; // points perdus sur chaque stat par un joueur placé hors de son poste
