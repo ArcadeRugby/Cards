@@ -1,0 +1,68 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rugby – Admin</title>
+<style>
+body{margin:0;background:#16262a;color:#e9efe9;font:14px/1.4 system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#0f1c1f;padding:10px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;border-bottom:1px solid #2e4745}
+h1{font:700 18px Georgia,serif;margin:0}h2{font:700 16px Georgia,serif;margin:0 0 8px}
+main{max-width:1000px;margin:0 auto;padding:14px;display:grid;gap:16px}section{background:#1d3033;border-radius:8px;padding:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}label{display:flex;flex-direction:column;gap:2px;font-size:12.5px}
+input,select{font:inherit;padding:5px 7px;border-radius:5px;border:1px solid #46625d;background:#10201f;color:inherit;width:100%}
+button{font:inherit;cursor:pointer;background:#e8e1cf;color:#1b2326;border:0;border-radius:5px;padding:7px 12px;font-weight:600}button.sec{background:transparent;color:#e9efe9;border:1px solid #5d7a74}
+table{border-collapse:collapse;width:100%}td,th{padding:3px 4px;text-align:left;vertical-align:middle}th{font-size:12px;opacity:.75;white-space:nowrap}.num{min-width:48px}
+.warn{background:#4a3b12;border-radius:6px;padding:8px 10px;font-size:13px}.wrap{overflow-x:auto}a{color:#9fd0c6}.note{opacity:.75;font-size:12.5px;margin:6px 0 0}
+</style></head><body>
+<header><h1>Rugby – Admin</h1><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><a href="index.html">← Ouvrir le jeu</a><button class="sec" onclick="location.reload()">Annuler les modifications</button><button id="exp">Télécharger surcharge.js</button></div></header>
+<main><div class="warn">Page réservée à l'administration. Tes modifications restent dans ce navigateur : elles ne changent le jeu qu'après avoir téléchargé <b>surcharge.js</b> et l'avoir ajouté à ton dépôt, à côté de <b>index.html</b>. Pense à télécharger régulièrement : fermer cette page efface les modifications non exportées.</div>
+<section><h2>Règles du match</h2><div class="grid" id="s-reg"></div></section>
+<section><h2>Actions d'attaque</h2><div class="wrap"><table id="s-att"></table></div></section>
+<section><h2>Efficacité de la défense</h2><div class="wrap"><table id="s-m"></table></div><p class="note">Bonus ou malus (en points de %) sur la réussite de l'attaque, selon la défense choisie.</p></section>
+<section><h2>Raretés des cartes</h2><div class="wrap"><table id="s-rar"></table></div></section>
+<section><h2>Boosters et récompenses</h2><div class="grid" id="s-boo"></div></section>
+<section><h2>Joueurs <small id="n-j" style="font-weight:400;opacity:.75"></small></h2>
+<div class="grid" style="margin-bottom:8px"><label>Poste<select id="f-num"></select></label><label>Rareté<select id="f-rar"></select></label><label>Nom<input id="f-q" placeholder="Rechercher"></label><label>&nbsp;<button id="add">+ Ajouter un joueur</button></label></div>
+<div class="wrap"><table id="s-j"></table></div><p class="note">Les 120 premiers résultats du filtre sont affichés. Supprimer un joueur le retire aussi des collections déjà enregistrées.</p></section></main>
+<script src="donnees.js"></script><script src="surcharge.js"></script>
+<script>
+const $=id=>document.getElementById(id),N=(v,a,b)=>Math.min(b,Math.max(a,parseFloat(v)||0)),gv=n=>(0,eval)(n),sv=(n,v)=>(0,eval)(n+'='+v),esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const REG=[['PAR_MI_TEMPS','Actions par mi-temps',1,60,1],['HOLE_BONUS','Bonus d\'attaque si défense désorganisée',0,50,1],['SPEC_BONUS','Bonus de spécialité',0,40,1],['ECART','Poids d\'un point d\'écart de stat',0,10,.5],['DEPLACEMENT_MAX','Déplacement max par action (0 à 1)',.05,1,.05],['SEUIL_PLACE','Distance « joueur en place » (0 à 1)',.02,.5,.01],['MIN_EN_PLACE','Défenseurs en place minimum (sur 15)',0,15,1]];
+const A=Object.keys(ATT),D=Object.keys(M),RK=Object.keys(RARETES);
+const inp=(at,v,a,b,s)=>`<input type="number" ${at} min="${a}" max="${b}" step="${s}" value="${v}">`;
+function renderAll(){
+ $('s-reg').innerHTML=REG.map(([n,l,a,b,s])=>`<label>${l}${inp('data-r="'+n+'"',gv(n),a,b,s)}</label>`).join('');
+ $('s-att').innerHTML='<tr><th>Action</th><th>Stat utilisée</th><th>Réussite de base (%)</th><th>Gain min (m)</th><th>Gain max (m)</th></tr>'+A.map(a=>`<tr><td>${a}</td><td>${STATS[ATT[a].s]}</td><td>${inp(`data-a="${a}" data-f="b"`,ATT[a].b,5,95,1)}</td><td>${inp(`data-a="${a}" data-f="g0"`,ATT[a].g[0],0,60,1)}</td><td>${inp(`data-a="${a}" data-f="g1"`,ATT[a].g[1],0,60,1)}</td></tr>`).join('');
+ $('s-m').innerHTML='<tr><th>Défense \\ Attaque</th>'+A.map(a=>`<th>${a}</th>`).join('')+'</tr>'+D.map(d=>`<tr><td>${d}</td>`+A.map(a=>`<td>${inp(`data-m="${d}" data-x="${a}"`,M[d][a],-40,40,1)}</td>`).join('')+'</tr>').join('');
+ $('s-rar').innerHTML='<tr><th>Rareté</th><th>Bonus de stats</th><th>Chance de spécialité aléatoire (0 à 1)</th><th>Poids de tirage</th></tr>'+RK.map(k=>`<tr><td>${RARETES[k].n}</td><td>${inp(`data-q="${k}" data-f="b"`,RARETES[k].b,0,5,1)}</td><td>${inp(`data-q="${k}" data-f="sp"`,RARETES[k].sp,0,1,.05)}</td><td>${inp(`data-q="${k}" data-f="w"`,RARETES[k].w,0,100,1)}</td></tr>`).join('');
+ $('s-boo').innerHTML=`<label>Cartes par booster${inp('data-o="cartes"',BOOSTER.cartes,1,15,1)}</label><label>Boosters de départ (doit diviser 15)<select data-o="depart">${[1,3,5,15].map(v=>`<option${v===BOOSTER.depart?' selected':''}>${v}</option>`).join('')}</select></label>`+['victoire','nul','defaite'].map(k=>`<label>Boosters gagnés : ${k}${inp('data-w="'+k+'"',RECOMPENSES[k],0,10,1)}</label>`).join('');
+ $('f-num').innerHTML='<option value="">Tous les postes</option>'+POSTES.map(([n,s])=>`<option value="${n}">${n} ${s}</option>`).join('');
+ $('f-rar').innerHTML='<option value="">Toutes les raretés</option>'+RK.map(k=>`<option value="${k}">${RARETES[k].n}</option>`).join('');
+ renderJ()}
+function renderJ(){
+ const fp=$('f-num').value,fr=$('f-rar').value,q=($('f-q').value||'').toLowerCase(),l=POOL.filter(p=>(!fp||p.num==fp)&&(!fr||p.rar===fr)&&(!q||p.nom.toLowerCase().includes(q)));
+ $('n-j').textContent='— '+POOL.length+' au total, '+l.length+' correspondent au filtre';
+ const o=(at)=>at;
+ $('s-j').innerHTML='<tr><th>Nom</th><th>Poste</th><th>Rareté</th>'+Object.values(STATS).map(x=>`<th>${x}</th>`).join('')+'<th>Spécialité</th><th></th></tr>'+l.slice(0,120).map(p=>`<tr><td><input data-j="${p.id}" data-f="nom" value="${esc(p.nom)}"></td>
+<td><select data-j="${p.id}" data-f="num">${POSTES.map(([n,s])=>`<option value="${n}"${n===p.num?' selected':''}>${n} ${s}</option>`).join('')}</select></td>
+<td><select data-j="${p.id}" data-f="rar">${RK.map(k=>`<option value="${k}"${k===p.rar?' selected':''}>${RARETES[k].n}</option>`).join('')}</select></td>
+${Object.keys(STATS).map(k=>`<td>${inp(`class="num" data-j="${p.id}" data-f="st.${k}"`,p.st[k],1,10,1)}</td>`).join('')}
+<td><select data-j="${p.id}" data-f="sp">${TOUS.map(x=>`<option${x===p.sp?' selected':''}>${x}</option>`).join('')}</select></td><td><button class="sec" data-del="${p.id}" aria-label="Supprimer">✕</button></td></tr>`).join('')}
+document.addEventListener('input',e=>{const t=e.target,d=t.dataset||{},v=t.value;
+ if(d.r){const g=REG.find(x=>x[0]===d.r);sv(d.r,N(v,g[2],g[3]))}
+ else if(d.a){const x=ATT[d.a];if(d.f==='b')x.b=N(v,5,95);else x.g[d.f==='g0'?0:1]=N(v,0,60)}
+ else if(d.m)M[d.m][d.x]=N(v,-40,40);
+ else if(d.q)RARETES[d.q][d.f]=N(v,0,d.f==='sp'?1:d.f==='b'?5:100);
+ else if(d.o)BOOSTER[d.o]=+v;
+ else if(d.w)RECOMPENSES[d.w]=N(v,0,10);
+ else if(d.j){const p=POOL.find(x=>x.id===d.j);if(!p)return;const f=d.f;
+  if(f==='nom')p.nom=v;else if(f==='num'){p.num=+v;p.poste=POSTES.find(x=>x[0]===+v)[1]}else if(f==='rar')p.rar=v;else if(f==='sp')p.sp=v;else if(f.startsWith('st.'))p.st[f.slice(3)]=Math.round(N(v,1,10))}
+ else if(t.id==='f-num'||t.id==='f-rar'||t.id==='f-q')renderJ()});
+document.addEventListener('click',e=>{const id=e.target.dataset&&e.target.dataset.del;if(!id)return;const i=POOL.findIndex(x=>x.id===id);if(i>=0&&confirm('Supprimer ce joueur ?')){POOL.splice(i,1);renderJ()}});
+$('add').onclick=()=>{const n=+($('f-num').value||1),pr=POSTES.find(x=>x[0]===n);POOL.unshift({id:'j'+(Math.max(0,...POOL.map(p=>+p.id.slice(1)))+1),nom:'Nouveau joueur',num:n,poste:pr[1],st:{...pr[2]},sp:pr[3],rar:'commun'});renderJ()};
+function genere(){const L=['/* Généré par admin.html : à placer dans le même dossier que index.html */'];
+ L.push(REG.map(([n])=>n+'='+gv(n)).join(';')+';');
+ L.push('Object.assign(BOOSTER,'+JSON.stringify(BOOSTER)+');Object.assign(RECOMPENSES,'+JSON.stringify(RECOMPENSES)+');');
+ for(const k of RK){const {b,sp,w}=RARETES[k];L.push(`Object.assign(RARETES[${JSON.stringify(k)}],${JSON.stringify({b,sp,w})});`)}
+ for(const a of A){const {b,g}=ATT[a];L.push(`Object.assign(ATT[${JSON.stringify(a)}],${JSON.stringify({b,g})});`)}
+ for(const d of D)L.push(`Object.assign(M[${JSON.stringify(d)}],${JSON.stringify(M[d])});`);
+ L.push('POOL.splice(0,POOL.length,...[\n'+POOL.map(p=>JSON.stringify(p)).join(',\n')+'\n]);');return L.join('\n')+'\n'}
+$('exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([genere()],{type:'text/javascript'}));a.download='surcharge.js';a.click()};
+renderAll();
+</script></body></html>
