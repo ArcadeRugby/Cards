@@ -16,12 +16,13 @@ function xvPage(){const ids=idsXV();$('x-note').textContent='Aucun malus automat
   document.querySelectorAll('.slot').forEach(b=>b.onclick=()=>{sel=+b.dataset.i;xvPage()});
   if(sel<0){$('x-pick').innerHTML='<p class="note">Clique sur un poste pour changer son titulaire.</p>';return}
   const n=sel+1,l=[...new Set(CAR.cartes)].map(carteDe).filter(Boolean).sort((a,b)=>(b.num===n)-(a.num===n)||tot(b)-tot(a));
-  $('x-pick').innerHTML=`<h3>n°${n} ${POSTES[sel][1]} : choisis un joueur</h3>`+l.map(k=>{const q=ids.indexOf(k.id);return `<button class="opt" data-id="${k.id}" style="--c:${RARETES[k.rar].c}"><span>${k.nom} <small>n°${k.num} ${k.poste}${k.num!==n?' · hors poste':''}${q>=0&&q!==sel?' · titulaire n°'+(q+1):''}${q===sel?' · en place':''}</small></span><b>${RARETES[k.rar].n} · F${k.st.f} V${k.st.v} P${k.st.p} K${k.st.k} D${k.st.d}</b></button>`}).join('');
+  $('x-pick').innerHTML=`<h3>n°${n} ${POSTES[sel][1]} : choisis un joueur</h3>`+l.map(k=>{const q=ids.indexOf(k.id);return `<button class="opt" data-id="${k.id}" style="--c:${RARETES[k.rar].c}"><span>${k.nom} <small>n°${k.num} ${k.poste}${k.num!==n?' · hors poste':''}${q>=0&&q!==sel?' · titulaire n°'+(q+1):''}${q===sel?' · en place':''}</small></span><b>${RARETES[k.rar].n} · A ${k.st.pu}/${k.st.vi}/${k.st.te}/${k.st.pi} · D ${k.st.pl}/${k.st.mo}/${k.st.an}/${k.st.co}</b></button>`}).join('');
   document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>choisir(b.dataset.id))}
 function choisir(id){const ids=idsXV(),q=ids.indexOf(id),old=ids[sel];
   if(q!==sel){const used=ids.filter(x=>x===id).length,own=CAR.cartes.filter(x=>x===id).length;if(q>=0&&used>=own)ids[q]=old;ids[sel]=id}
   CAR.xv=ids;sauve();sel=-1;xvPage()}
-const faceCarte=c=>`<div class="carte" style="--c:${RARETES[c.rar].c}"><i><div class="dos"></div><div class="face"><b>${c.nom}</b><br>n°${c.num} · ${c.poste}<br><span style="color:${RARETES[c.rar].c};font-weight:700">${RARETES[c.rar].n}</span><br>F${c.st.f} V${c.st.v} P${c.st.p} K${c.st.k} D${c.st.d}<br>★ ${c.sp}</div></i></div>`;
+const resume=c=>`Att ${c.st.pu}·${c.st.vi}·${c.st.te}·${c.st.pi}<br>Déf ${c.st.pl}·${c.st.mo}·${c.st.an}·${c.st.co}<br>Ph ${c.st.me}·${c.st.la}·${c.st.de}·${c.st.tb}`;
+const faceCarte=c=>`<div class="carte" style="--c:${RARETES[c.rar].c}"><i><div class="dos"></div><div class="face"><b>${c.nom}</b><br>n°${c.num} · ${c.poste}<br><span style="color:${RARETES[c.rar].c};font-weight:700">${RARETES[c.rar].n}</span><br>${resume(c)}<br>★ ${c.sp}</div></i></div>`;
 function ouvrir(cartes,titre){
   go('boost');$('b-titre').textContent=titre;$('b-cards').innerHTML=cartes.map(faceCarte).join('');
   CAR.cartes.push(...cartes.map(c=>c.id));sauve();const b=$('b-btn'),els=[...document.querySelectorAll('#b-cards .carte')];
