@@ -1,4 +1,3 @@
-
 /* ====== OUTILS ====== */
 const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1)),cl=(v,a,b)=>Math.max(a,Math.min(b,v));
 const pick=w=>{let t=Object.values(w).reduce((a,b)=>a+b,0),r=Math.random()*t;for(const k in w)if((r-=w[k])<0)return k;return Object.keys(w)[0]};
@@ -6,8 +5,9 @@ const shuf=a=>a.map(x=>[Math.random(),x]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
 function team(){const p=shuf(PRE),n=shuf(NOM);return POSTES.map(([num,poste,st,sp],i)=>{const s={};for(const k in st)s[k]=cl(st[k]+R(-1,1),1,10);return{num,poste,st:s,sp,nom:p[i]+' '+n[i]}})}
 const MON_EQUIPE=team();
 /* ====== RÈGLE DE RÉSOLUTION ====== */
-function pAtt(A,D,a,d,hole){const x=ATT[a];return cl(x.b+ECART*(A.st[x.s]-D.st.d)+M[d][a]+(hole?HOLE_BONUS:0)+(A.sp===a?SPEC_BONUS:0)-(D.sp===d?8:0),5,95)}
-const moy=f=>Math.round(Object.keys(ATT).reduce((s,a)=>s+f(a),0)/4);
+const has=(p,c)=>(SPEC[p.sp]||[]).includes(c);
+const POST=Object.keys(MATRICE.pu);
+function pAtt(A,D,a,po){const x=ATT[a];return cl(x.b+ECART*(A.st[x.s]-D.st[po])+MATRICE[x.s][po]+(dis()?HOLE_BONUS:0)-(S.press?PRESS_MALUS:0)+(has(A,a)?SPEC_BONUS:0)-(has(D,po)?8:0),5,95)}
 /* ====== ÉTAT ====== */
 let S;
 function init(){S={eq:{me:(MODE==='carriere'&&XV)?XV:MON_EQUIPE,ai:team()},sc:{me:0,ai:0},ball:'me',pos:40,hole:false,n:0,busy:false,end:false,ci:8,di:0,ax:.5,late:false,reset:true};draw();dots.forEach(p=>{const t=slot(p);p.lx=p.x=p.tx=t.x;p.ly=p.y=p.ty=t.y});choose();log('Coup d\'envoi : tu as le ballon.');turn()}
@@ -32,26 +32,28 @@ function turn(){
   $('hint').textContent=me?'Tu as le ballon : choisis une action (le % est une moyenne selon la défense adverse).':'L\'adversaire a le ballon : choisis ta défense (le % est l\'efficacité moyenne selon son attaque).';
   if(!OPT.pct)$('hint').textContent=me?'Tu as le ballon : choisis une action.':'L\'adversaire a le ballon : choisis ta défense.';
   const a=$('acts');a.innerHTML='';
-  if(me)Object.keys(ATT).forEach(k=>add(k,moy(x=>DEF.reduce((s,dd)=>s+pAtt(c,d,k,dd,dis()),0)/4)));
-  else DEF.forEach(k=>add(k,100-moy(x=>pAtt(c,d,x,k,dis()))));
-  function add(k,pct){const b=document.createElement('button');b.innerHTML=`<span>${k}${(me?c:d).sp===k?' ★':''}</span><b>${OPT.pct?pct+' %':''}</b>`;b.onclick=()=>play(k);a.appendChild(b)}
+  if(me)Object.keys(ATT).forEach(k=>add(k,Math.round(POST.reduce((s,po)=>s+pAtt(c,d,k,po),0)/POST.length),LIB[k],has(c,k)));
+  else POST.forEach(po=>add(po,100-Math.round(Object.keys(ATT).reduce((s,a)=>s+pAtt(c,d,a,po),0)/Object.keys(ATT).length),STATS[po],has(d,po)));
+  function add(k,pct,lab,star){const b=document.createElement('button');b.innerHTML=`<span>${lab}${star?' ★':''}</span><b>${OPT.pct?pct+' %':''}</b>`;b.onclick=()=>play(k);a.appendChild(b)}
 }
 /* ====== TOUR DE JEU ====== */
 function play(choice){
   if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
   const me=S.ball==='me',c=C(),d=D();
-  const a=me?choice:aiAtt(),df=me?aiDef():choice;
-  const prev={s:S.ball,i:S.ci},pd=S.ball==='me'?-1:1,cx=slot({s:S.ball,i:S.ci}).x;
-  const ok=R(1,100)<=pAtt(c,d,a,df,dis());let msg=`${c.nom} : ${a} — la défense joue « ${df} ». `,flip=false,pass=false,gain=0;
-  let nx=cx;if(a==='Botter')nx=R(15,85)/100;else if(ok)nx=cx+(a==='Percuter'?R(-4,4):(Math.random()<.5?-1:1)*R(10,20))/100;S.ax=cl(nx,.06,.94);
-  if(a==='Botter'){gain=ok?R(...ATT.Botter.g):R(5,10);S.pos=Math.min(S.pos+gain,97);msg+=ok?`Beau dégagement de ${gain} m !`:`Coup de pied court (${gain} m).`;flip=true}
-  else if(ok){gain=R(...ATT[a].g);S.pos+=gain;msg+=`Réussi : +${gain} m.`;S.hole=(df==='Gratter'||df==='Monter');if(S.hole)msg+=' La défense est désorganisée !';pass=a==='Passer'}
+  const a=me?choice:aiAtt(),po=me?aiDef():choice,X=ATT[a];
+  const prev={s:S.ball,i:S.ci},pd=S.ball==='me'?-1:1,cx=slot(prev).x;
+  const ok=R(1,100)<=pAtt(c,d,a,po);
+  let msg=`${c.nom} : ${LIB[a]} — la défense choisit « ${STATS[po]} ». `,flip=false,pass=false;
+  let nx=cx;if(X.kick)nx=R(15,85)/100;else if(ok)nx=cx+(a==='Percussion'?R(-4,4):(Math.random()<.5?-1:1)*R(10,20))/100;S.ax=cl(nx,.06,.94);
+  S.press=false;
+  if(X.kick){const gain=ok?R(...X.g):R(5,10);S.pos=Math.min(S.pos+gain,97);msg+=ok?`Réussi : ${gain} m gagnés au pied.`:`Coup de pied court (${gain} m).`;flip=true;if(ok&&X.press){S.press=true;msg+=' Pression sur le receveur !'}}
+  else if(ok){const gain=R(...X.g);S.pos+=gain;msg+=`Réussi : +${gain} m.`;S.hole=(po==='co'||po==='an');if(S.hole)msg+=' La défense est désorganisée !';if(a==='Conservation')S.hole=false;pass=a==='Passe'}
   else{S.hole=false;
-    if(a==='Passer'){flip=true;msg+=df==='Monter'?'Interception !':'En-avant, ballon perdu.'}
+    if(a==='Passe'){flip=true;msg+=(po==='an'&&R(1,100)<=INT_BASE+INT_K*d.st.an+(has(d,'an')?15:0))?'Interception !':'En-avant, ballon perdu.'}
     else{const g=R(0,2);S.pos+=g;msg+=`Plaqué (+${g} m).`;
-      if(df==='Gratter'&&R(1,100)<=35+ECART*(d.st.d-c.st.f)+(d.sp==='Gratter'?15:0)){flip=true;msg+=' Ballon gratté, turnover !'}}}
+      if(po==='co'&&R(1,100)<=REC_BASE+REC_K*d.st.co+(has(d,'co')?15:0)){flip=true;msg+=' Ballon récupéré au sol, turnover !'}}}
   const tryNow=!flip&&S.pos>=100,ey=tryNow?(pd<0?.02:.98):(S.ball==='me'?1-S.pos/100:S.pos/100);moveBall(prev,a,S.ax,ey);
-  if(tryNow){S.ax=.5;S.reset=true;const kp=R(1,100)<=40+5*c.st.k;S.sc[S.ball]+=5+(kp?2:0);msg=`${c.nom} : ESSAI ! ${kp?'Transformé (+7).':'Transformation ratée (+5).'}`;S.ball=other(S.ball);S.pos=50;S.hole=false;pass=false;choose()}
+  if(tryNow){S.ax=.5;S.reset=true;const kp=R(1,100)<=40+5*c.st.pi;S.sc[S.ball]+=5+(kp?2:0);msg=`${c.nom} : ESSAI ! ${kp?'Transformé (+7).':'Transformation ratée (+5).'}`;S.ball=other(S.ball);S.pos=50;S.hole=false;pass=false;choose()}
   else if(flip){S.ball=other(S.ball);S.pos=100-S.pos;S.hole=false;choose()}
   else choose(pass);
   S.n++;$('sm').textContent=S.sc.me;$('sa').textContent=S.sc.ai;log(msg);
@@ -59,8 +61,8 @@ function play(choice){
   if(S.n>=2*PAR_MI_TEMPS){S.end=true;const r=S.sc.me>S.sc.ai?'Victoire !':S.sc.me<S.sc.ai?'Défaite.':'Match nul.';log(msg+' — FIN DU MATCH : '+r+(MODE==='carriere'?finMatch(S.sc.me>S.sc.ai?'victoire':S.sc.me<S.sc.ai?'defaite':'nul'):''));const b=document.createElement('button');b.textContent=MODE==='carriere'?'Retour à la carrière':'Rejouer';b.onclick=MODE==='carriere'?()=>go('car'):init;$('acts').innerHTML='';$('acts').appendChild(b);return}
   const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300);
 }
-function aiAtt(){const w={Percuter:35,Éviter:20,Passer:30,Botter:15};if(S.pos<25)w.Botter+=35;if(S.pos>75){w.Percuter+=25;w.Botter=0}return pick(w)}
-function aiDef(){return pick({Plaquer:40,Couvrir:20,Monter:20,Gratter:20})}
+function aiAtt(){const w={Percussion:30,Duel:15,Passe:25,Conservation:10,PiedTactique:10,PiedPression:10};if(S.pos<25){w.PiedTactique+=30;w.PiedPression+=15}if(S.pos>75){w.Percussion+=25;w.PiedTactique=0;w.PiedPression=0}return pick(w)}
+function aiDef(){return pick({pl:40,mo:25,an:20,co:15})}
 /* ====== TERRAIN (points sur un carré vert) ====== */
 const cv=$('cv'),g=cv.getContext('2d');let dots=[],ball={x:.5,y:.5,tx:.5,ty:.5},ring={c:null,d:null};
 function draw(){dots=[];for(const s of['me','ai'])for(let i=0;i<15;i++)dots.push({s,i,x:.5,y:.5,tx:.5,ty:.5,lx:.5,ly:.5,pl:true})}
@@ -85,7 +87,7 @@ function retarget(){
 /* fin d'action : le ballon (et le porteur s'il court) se déplacent vers le nouvel endroit */
 function moveBall(prev,a,x,y){
   const d=dots.find(p=>p.s===prev.s&&p.i===prev.i);
-  if(d&&(a==='Percuter'||a==='Éviter')){d.tx=d.lx=x;d.ty=d.ly=y}
+  if(d&&(a==='Percussion'||a==='Duel')){d.tx=d.lx=x;d.ty=d.ly=y}
   ball.tx=x;ball.ty=y}
 function frame(){
   if(!S){requestAnimationFrame(frame);return}
