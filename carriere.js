@@ -9,9 +9,9 @@ function tirer(n){const o=[];for(let i=0;i<n;i++){let t=Math.random()*100,r='com
 function lotDepart(k){const per=15/BOOSTER.depart;return POSTES.slice(k*per,k*per+per).map(([n])=>{let l=POOL.filter(c=>c.num===n&&c.rar==='commun');if(!l.length)l=POOL.filter(c=>c.num===n);return l[R(0,l.length-1)]})}
 const carteDe=id=>POOL.find(x=>x.id===id);
 function idsXV(){const col=collection();if(!(CAR.xv&&CAR.xv.length===15&&CAR.xv.every(id=>col.some(x=>x.id===id)))){CAR.xv=composerXV().map(x=>x.id);sauve()}return CAR.xv}
-function buildXV(){return idsXV().map((id,i)=>{const k=carteDe(id),n=i+1;if(k.num===n)return k;const st={};for(const s in k.st)st[s]=Math.max(1,k.st[s]-MALUS_HORS_POSTE);return{...k,num:n,st,hors:true}})}
+function buildXV(){return idsXV().map((id,i)=>{const k=carteDe(id);return k.num===i+1?k:{...k,num:i+1,hors:true}})}
 let sel=-1;
-function xvPage(){const ids=idsXV();$('x-note').textContent=`Un joueur placé hors de son poste perd ${MALUS_HORS_POSTE} points sur chaque stat pendant le match.`;
+function xvPage(){const ids=idsXV();$('x-note').textContent='Aucun malus automatique : un joueur hors poste garde ses stats, c\'est à toi de juger s\'il convient.';
   $('x-grid').innerHTML=ids.map((id,i)=>{const k=carteDe(id);return `<button class="slot${i===sel?' sel':''}" data-i="${i}" style="--c:${RARETES[k.rar].c}"><b>n°${i+1} ${POSTES[i][1]}</b><br>${k.nom}<br><small>${RARETES[k.rar].n} · total ${tot(k)}${k.num!==i+1?' · <span class="hp">hors poste</span>':''}</small></button>`}).join('');
   document.querySelectorAll('.slot').forEach(b=>b.onclick=()=>{sel=+b.dataset.i;xvPage()});
   if(sel<0){$('x-pick').innerHTML='<p class="note">Clique sur un poste pour changer son titulaire.</p>';return}
