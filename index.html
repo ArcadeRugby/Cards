@@ -50,6 +50,7 @@ th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #2e4745;white-spa
 .slot small,.opt small{opacity:.75}.hp{color:#b3402a;font-weight:700}
 #x-pick{display:grid;gap:6px}#x-pick h3{margin:6px 0 0}
 .opt{border-left:6px solid var(--c);text-align:left;font-weight:400;font-size:14px;align-items:center}.opt b{font-size:12.5px;white-space:nowrap}
+.roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}.roles label{flex-direction:column;align-items:stretch;gap:3px;font-size:13px}.roles select{width:100%}
 </style></head><body>
 <section class="screen on" id="s-home"><div class="center"><h1 class="logo">RUGBY</h1><p class="sub">Un jeu de rugby tactique, tour par tour</p><button class="big" data-go="menu">Commencer</button></div></section>
 <section class="screen" id="s-menu"><div class="center"><h2>Menu principal</h2><div class="stack">
@@ -71,7 +72,8 @@ th,td{padding:6px 10px;text-align:left;border-bottom:1px solid #2e4745;white-spa
 <div class="acts"><button id="c-open"></button><button id="c-xv">Composer mon XV</button><button id="c-play">Jouer un match</button></div>
 <h3 style="margin:8px 0 0">Ma collection</h3><div class="tablewrap" id="c-col"></div><div><button class="ghost" id="c-reset">Recommencer la carrière</button></div></div></section>
 <section class="screen" id="s-xv"><div class="page"><div><button class="ghost" data-go="car">← Carrière</button> <button class="ghost" id="x-auto">Composition auto</button></div><h2>Composition du XV</h2><p class="note" id="x-note"></p>
-<div class="slots" id="x-grid"></div><div id="x-pick"></div></div></section>
+<div class="slots" id="x-grid"></div>
+<h3 style="margin:10px 0 0">Rôles pour les phases spécifiques</h3><div class="roles" id="x-roles"></div><p class="note">Ces joueurs sont utilisés en début de match pour la touche, les pénalités et les transformations.</p><div id="x-pick"></div></div></section>
 <section class="screen" id="s-boost"><div class="page" style="text-align:center"><h2 id="b-titre"></h2><div class="cards" id="b-cards"></div><div><button class="big" id="b-btn"></button></div></div></section>
 <main class="screen" id="s-match">
 <header><div><button class="ghost" id="b-quit">← Menu</button> <h1 style="display:inline;margin-left:8px">Rugby – tour par tour</h1></div><div class="score"><span class="me">Toi <span id="sm">0</span></span> – <span class="ai"><span id="sa">0</span> Adversaire</span></div></header>
