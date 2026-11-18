@@ -10,7 +10,7 @@ const POST=Object.keys(MATRICE.pu);
 function pAtt(A,D,a,po){const x=ATT[a];return cl(x.b+ECART*(A.st[x.s]-D.st[po])+MATRICE[x.s][po]+(dis()?HOLE_BONUS:0)-(S.press?PRESS_MALUS:0)+(has(A,a)?SPEC_BONUS:0)-(has(D,po)?8:0),5,95)}
 /* ====== ÉTAT ====== */
 let S;
-function init(){S={eq:{me:(MODE==='carriere'&&XV)?XV:MON_EQUIPE,ai:team()},sc:{me:0,ai:0},ball:'me',first:'me',kick:true,pos:50,hole:false,n:0,busy:false,end:false,ci:8,di:0,ax:.5,late:false,reset:true};draw();dots.forEach(p=>{const t=slot(p);p.lx=p.x=p.tx=t.x;p.ly=p.y=p.ty=t.y});choose();log('Coup d\'envoi : tu as le ballon.');turn()}
+function init(){S={eq:{me:(MODE==='carriere'&&XV)?XV:MON_EQUIPE,ai:team()},sc:{me:0,ai:0},ball:'me',first:'me',kick:true,pos:50,hole:false,n:0,busy:false,end:false,ci:8,di:0,ax:.5,late:false,reset:true};S.roles={me:(MODE==='carriere'&&ROLES)||rolesAuto(S.eq.me),ai:rolesAuto(S.eq.ai)};draw();dots.forEach(p=>{const t=slot(p);p.lx=p.x=p.tx=t.x;p.ly=p.y=p.ty=t.y});choose();log('Coup d\'envoi : tu as le ballon.');turn()}
 const other=b=>b==='me'?'ai':'me';
 const dis=()=>S.hole||S.late; // défense désorganisée : trou laissé par une action OU joueurs hors de position
 function choose(passed){
@@ -72,7 +72,7 @@ function suite(msg){
   if(!pend&&S.n>=2*PAR_MI_TEMPS){fin(msg);return}
   const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300)}
 function fin(msg){S.end=true;const r=S.sc.me>S.sc.ai?'Victoire !':S.sc.me<S.sc.ai?'Défaite.':'Match nul.';log(msg+' — FIN DU MATCH : '+r+(MODE==='carriere'?finMatch(S.sc.me>S.sc.ai?'victoire':S.sc.me<S.sc.ai?'defaite':'nul'):''));const b=document.createElement('button');b.textContent=MODE==='carriere'?'Retour à la carrière':'Rejouer';b.onclick=MODE==='carriere'?()=>go('car'):init;$('acts').innerHTML='';$('acts').appendChild(b);}
-const tireur=t=>S.eq[t].reduce((b,p,i)=>p.st.tb>S.eq[t][b].st.tb?i:b,0);
+const tireur=t=>S.roles[t].buteur;
 const pTir=(k,dist)=>cl(TIR_BASE+TIR_K*k.st.tb+(has(k,'tb')?SPEC_BONUS:0)-(dist==null?0:DIST_K*Math.max(0,dist-DIST_FREE)),5,95);
 function melee(at){const f=t=>1.2*(t[0].st.me+t[1].st.me+t[2].st.me)+t.slice(3,8).reduce((s,p)=>s+p.st.me,0),A=f(S.eq[at]),B=f(S.eq[other(at)]);return cl(50+MEL_SENS*100*(A-B)/(A+B),10,90)}
 function ecran(titre,zone,hint,btns){
@@ -100,8 +100,8 @@ function penRes(ch){
   S.pen=false;S.hole=false;S.press=false;let msg='Pénalité : ';
   if(t==='tir'){const ok=R(1,100)<=pTir(k,dist);msg+=`${k.nom} tente les poteaux (${dist} m) : `;
     if(ok){S.sc[at]+=3;msg+='réussi (+3) !';S.ball=df;S.pos=50;S.ax=.5;S.reset=true;S.kick=true}else{msg+='manqué, renvoi aux 22 m.';S.ball=df;S.pos=22;S.ax=R(30,70)/100}}
-  else if(t==='touche'){const g=R(20,35)+k.st.pi-5;S.pos=Math.min(S.pos+g,97);S.ax=Math.random()<.5?.08:.92;const w=R(1,100)<=cl(60+4*(S.eq[at][1].st.la-5),30,90);
-    msg+=`touche trouvée (+${g} m), lancer ${w?'gagné.':'perdu, ballon à l\'adversaire.'}`;if(!w){S.ball=df;S.pos=100-S.pos}}
+  else if(t==='touche'){const g=R(20,35)+k.st.pi-5;S.pos=Math.min(S.pos+g,97);S.ax=Math.random()<.5?.08:.92;const ra=S.roles[at],rd=S.roles[df],E=S.eq[at],F=S.eq[df],A=E[ra.lanceur].st.la+Math.max(E[ra.saut1].st.de,E[ra.saut2].st.de),B=Math.max(...[rd.saut1,rd.saut2].map(i=>F[i].st.de+F[i].st.an)),w=R(1,100)<=cl(50+4*(A-B),20,90);
+    msg+=`touche trouvée (+${g} m), lancer de ${E[ra.lanceur].nom} ${w?'gagné.':'perdu, ballon à l\'adversaire.'}`;if(!w){S.ball=df;S.pos=100-S.pos}}
   else if(t==='melee'){const w=R(1,100)<=melee(at);msg+=w?'mêlée gagnée, la défense est désorganisée !':'mêlée perdue, ballon à l\'adversaire.';if(w)S.hole=true;else{S.ball=df;S.pos=100-S.pos}}
   else msg+='jeu à la main, la défense recule.';
   moveBall(prev,'Pied',S.ax,S.ball==='me'?1-S.pos/100:S.pos/100);choose();if(t==='main')S.ci=8;suite(msg)}
@@ -172,7 +172,7 @@ const go=n=>{document.querySelectorAll('.screen').forEach(e=>e.classList.toggle(
 function roster(){$('roster').innerHTML='<table><thead><tr><th>N°</th><th>Nom</th><th>Poste</th>'+Object.values(STATS).map(x=>`<th>${x}</th>`).join('')+'<th>Spécialité</th></tr></thead><tbody>'+
  (CAR?collection():MON_EQUIPE).map(p=>`<tr><td>${p.num}</td><td>${p.nom}</td><td>${p.poste}</td>${Object.keys(STATS).map(k=>`<td>${p.st[k]}</td>`).join('')}<td>${p.sp}</td></tr>`).join('')+'</tbody></table>'}
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
-$('b-match').onclick=()=>{MODE='direct';COULEUR_ME='#2f6fe4';go('match');init()};
+$('b-match').onclick=()=>{MODE='direct';ROLES=null;COULEUR_ME='#2f6fe4';go('match');init()};
 $('b-quit').onclick=()=>{if(S&&!S.end&&!confirm('Quitter le match en cours ?'))return;if(S)S.end=true;go(MODE==='carriere'?'car':'menu')};
 $('o-dur').onchange=e=>{PAR_MI_TEMPS=+e.target.value};
 $('o-pct').onchange=e=>{OPT.pct=e.target.checked};
