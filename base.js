@@ -12,13 +12,10 @@ function parseCSV(txt){
     else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&txt[i+1]==='\n')i++;row.push(cur);cur='';if(row.some(x=>x!==''))rows.push(row);row=[]}else cur+=ch}
   row.push(cur);if(row.some(x=>x!==''))rows.push(row);return rows}
 const decoder=buf=>{try{return new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){return new TextDecoder('windows-1252').decode(buf)}};
-/* transforme le texte CSV en joueurs valides + liste d'erreurs lisibles */
-function lireJoueurs(txt){
-  const rows=parseCSV(txt),erreurs=[],joueurs=[];if(!rows.length)return{joueurs,erreurs:['Fichier vide.']};
-  const head=rows[0].map(norm),idx=k=>head.indexOf(k),manq=COLS.filter(k=>k!=='photo'&&idx(k)<0);
-  if(manq.length)return{joueurs,erreurs:['Colonnes manquantes : '+manq.join(', ')+'. Première ligne attendue : '+COLS.join(';')]};
-  const ids=new Set(),rmap={},smap={};Object.keys(RARETES).forEach(k=>{rmap[norm(k)]=k;rmap[norm(RARETES[k].n)]=k});Object.keys(SPEC).forEach(k=>smap[norm(k)]=k);
-  rows.slice(1).forEach((r,n)=>{const L=n+2,g=k=>idx(k)<0?'':(r[idx(k)]||'').trim(),err=m=>{erreurs.push(`Ligne ${L} : ${m}`);ok=false};let ok=true;
+/* vérifie des lignes (objets avec les colonnes COLS) : renvoie les joueurs valides + les erreurs lisibles */
+function validerLignes(lignes,debut){
+  const erreurs=[],joueurs=[],ids=new Set(),rmap={},smap={};Object.keys(RARETES).forEach(k=>{rmap[norm(k)]=k;rmap[norm(RARETES[k].n)]=k});Object.keys(SPEC).forEach(k=>smap[norm(k)]=k);
+  lignes.forEach((r,n)=>{const L=n+debut,g=k=>String(r[k]==null?'':r[k]).trim(),err=m=>{erreurs.push(`Ligne ${L} : ${m}`);ok=false};let ok=true;
     const id=g('id'),nom=g('nom'),num=parseInt(g('poste'),10),rar=rmap[norm(g('rarete'))],po=POSTES.find(p=>p[0]===num);
     if(!id)err('identifiant vide');else if(ids.has(id))err('identifiant en double ('+id+')');
     if(!nom)err('nom vide');if(!po)err('poste invalide « '+g('poste')+' » (1 à 15)');if(!rar)err('rareté inconnue « '+g('rarete')+' »');
@@ -27,6 +24,12 @@ function lireJoueurs(txt){
     if(!ok)return;ids.add(id);
     joueurs.push({id,nom,num,poste:po[1],st,sp:sp||po[3],rar,age:parseInt(g('age'),10)||null,poids:parseInt(g('poids'),10)||null,taille:parseInt(g('taille'),10)||null,nat:g('nationalite'),photo:g('photo')})});
   return{joueurs,erreurs}}
+/* transforme le texte CSV en joueurs valides + liste d'erreurs lisibles */
+function lireJoueurs(txt){
+  const rows=parseCSV(txt);if(!rows.length)return{joueurs:[],erreurs:['Fichier vide.']};
+  const head=rows[0].map(norm),idx=k=>head.indexOf(k),manq=COLS.filter(k=>k!=='photo'&&idx(k)<0);
+  if(manq.length)return{joueurs:[],erreurs:['Colonnes manquantes : '+manq.join(', ')+'. Première ligne attendue : '+COLS.join(';')]};
+  return validerLignes(rows.slice(1).map(r=>Object.fromEntries(COLS.map(k=>[k,idx(k)<0?'':r[idx(k)]]))),2)}
 /* exporte en CSV (ouvrable dans Excel / Google Sheets) */
 function versCSV(pool){const q=v=>{v=v==null?'':String(v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
   return '\uFEFF'+[COLS.join(';')].concat(pool.map(p=>[p.id,p.nom,p.num,RARETES[p.rar].n,...CLES.map(k=>p.st[k]),p.sp,p.age,p.poids,p.taille,p.nat,p.photo].map(q).join(';'))).join('\r\n')+'\r\n'}
@@ -38,10 +41,20 @@ function tableBilan(pool){const RK=Object.keys(RARETES);
 function ph(p){const ini=String(p.nom||'?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase(),col=(RARETES[p.rar]||{c:'#9aa5a1'}).c;
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#2a4a44"/><circle cx="100" cy="78" r="36" fill="${col}" opacity=".55"/><ellipse cx="100" cy="190" rx="68" ry="58" fill="${col}" opacity=".55"/><text x="100" y="118" font-family="Georgia,serif" font-size="46" font-weight="700" fill="#fff" text-anchor="middle">${ini.replace(/[<&]/g,'')}</text></svg>`;
   return 'data:image/svg+xml,'+encodeURIComponent(svg).replace(/'/g,'%27')}
-const avatar=(p,cls)=>`<img class="${cls}" src="${escH(p.photo||ph(p))}" alt="${escH(p.nom)}" title="${escH(p.nom)}" onerror="this.onerror=null;this.src='${ph(p)}'">`;
-/* chargement au démarrage : joueurs.csv à côté de index.html, sinon base générée automatiquement */
+const photoDef=p=>(typeof SUPABASE!=='undefined'&&SUPABASE.url)?SUPABASE.url.replace(/\/$/,'')+'/storage/v1/object/public/photos/'+encodeURIComponent(p.id)+'.jpg':ph(p);
+const avatar=(p,cls)=>`<img class="${cls}" src="${escH(p.photo||photoDef(p))}" alt="${escH(p.nom)}" title="${escH(p.nom)}" onerror="this.onerror=null;this.src='${ph(p)}'">`;
+/* chargement au démarrage : Supabase si configuré, sinon joueurs.csv, sinon base générée automatiquement */
 let SOURCE_BASE='génération automatique',ERREURS_BASE=[];
-const PRET=(async()=>{try{const r=await fetch('joueurs.csv',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
-  const {joueurs,erreurs}=lireJoueurs(decoder(await r.arrayBuffer()));ERREURS_BASE=erreurs;if(erreurs.length)console.warn('joueurs.csv : '+erreurs.length+' problème(s)',erreurs.slice(0,10));
-  if(POSTES.every(p=>joueurs.some(j=>j.num===p[0]))){POOL.splice(0,POOL.length,...joueurs);SOURCE_BASE='joueurs.csv'}else console.warn('joueurs.csv ignoré : il faut au moins un joueur valide par poste.')}
- catch(e){console.info('joueurs.csv non chargé, base générée automatiquement ('+(e.message||e)+')')}})();
+async function depuisSupabase(){const S=typeof SUPABASE!=='undefined'?SUPABASE:null;if(!S||!S.url||!S.key)return null;
+  const h={apikey:S.key};if(!S.key.startsWith('sb_'))h.Authorization='Bearer '+S.key;let tout=[];
+  for(let off=0;;off+=1000){const r=await fetch(`${S.url.replace(/\/$/,'')}/rest/v1/joueurs?select=*&order=id&limit=1000&offset=${off}`,{headers:h});
+    if(!r.ok)throw new Error('Supabase HTTP '+r.status);const p=await r.json();tout=tout.concat(p);if(p.length<1000)break}
+  return validerLignes(tout,1)}
+async function depuisCSV(){const r=await fetch('joueurs.csv',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return lireJoueurs(decoder(await r.arrayBuffer()))}
+const complet=res=>res&&POSTES.every(p=>res.joueurs.some(j=>j.num===p[0]));
+const PRET=(async()=>{let res=null,src='';
+  try{res=await depuisSupabase();src='Supabase'}catch(e){console.warn('Supabase indisponible :',e.message||e);res=null}
+  if(!complet(res)){if(res)console.warn('Supabase : il faut au moins un joueur valide par poste.');res=null;
+    try{res=await depuisCSV();src='joueurs.csv'}catch(e){console.info('joueurs.csv non chargé ('+(e.message||e)+')');res=null}}
+  if(res){ERREURS_BASE=res.erreurs;if(res.erreurs.length)console.warn(src+' : '+res.erreurs.length+' problème(s)',res.erreurs.slice(0,10));
+    if(complet(res)){POOL.splice(0,POOL.length,...res.joueurs);SOURCE_BASE=src}else console.warn(src+' ignoré : il faut au moins un joueur valide par poste.')}})();
