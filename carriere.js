@@ -30,8 +30,9 @@ function xvPage(){const ids=idsXV();rolesUI();$('x-note').textContent='Aucun mal
 function choisir(id){const ids=idsXV(),q=ids.indexOf(id),old=ids[sel];
   if(q!==sel){const used=ids.filter(x=>x===id).length,own=CAR.cartes.filter(x=>x===id).length;if(q>=0&&used>=own)ids[q]=old;ids[sel]=id}
   CAR.xv=ids;sauve();sel=-1;xvPage()}
-const resume=c=>`Att ${c.st.pu}·${c.st.vi}·${c.st.te}·${c.st.pi}<br>Déf ${c.st.pl}·${c.st.mo}·${c.st.an}·${c.st.co}<br>Ph ${c.st.me}·${c.st.la}·${c.st.de}·${c.st.tb}`;
-const faceCarte=c=>`<div class="carte" style="--c:${RARETES[c.rar].c}"><i><div class="dos"></div><div class="face"><b>${c.nom}</b><br>n°${c.num} · ${c.poste}<br><span style="color:${RARETES[c.rar].c};font-weight:700">${RARETES[c.rar].n}</span><br>${resume(c)}<br>★ ${c.sp}</div></i></div>`;
+const GR=['pu','vi','te','pi','pl','mo','an','co','me','la','de','tb'];
+const fiche=c=>`${avatar(c,'photo')}<b>${escH(c.nom)}</b><span class="sub">n°${c.num} ${c.poste} · <span style="color:${RARETES[c.rar].c};font-weight:700">${RARETES[c.rar].n}</span></span><div class="sts">${GR.map(k=>`<span><i>${k}</i>${c.st[k]}</span>`).join('')}</div><div>★ ${c.sp}</div><div class="bio">${[c.age&&c.age+' ans',c.poids&&c.poids+' kg',c.taille&&c.taille+' cm',c.nat].filter(Boolean).map(escH).join(' · ')}</div>`;
+const faceCarte=c=>`<div class="carte" style="--c:${RARETES[c.rar].c}"><i><div class="dos"></div><div class="face fiche">${fiche(c)}</div></i></div>`;
 function ouvrir(cartes,titre){
   go('boost');$('b-titre').textContent=titre;$('b-cards').innerHTML=cartes.map(faceCarte).join('');
   CAR.cartes.push(...cartes.map(c=>c.id));sauve();const b=$('b-btn'),els=[...document.querySelectorAll('#b-cards .carte')];
@@ -43,8 +44,7 @@ function hub(){
   const o=$('c-open');o.textContent=dep?`Ouvrir un booster de départ (${CAR.depart})`:`Ouvrir un booster (${CAR.boosters})`;o.disabled=!dep&&CAR.boosters<1;
   $('c-play').disabled=dep;
   const xv=dep?[]:idsXV();$('c-xv').disabled=dep;
-  $('c-col').innerHTML=dep?'':'<table><thead><tr><th>XV</th><th>N°</th><th>Nom</th><th>Poste</th><th>Rareté</th>'+Object.values(STATS).map(x=>`<th>${x}</th>`).join('')+'<th>Spécialité</th></tr></thead><tbody>'+
-   collection().map(c=>`<tr><td>${xv.includes(c.id)?'✔':''}</td><td>${c.num}</td><td>${c.nom}</td><td>${c.poste}</td><td style="color:${RARETES[c.rar].c}">${RARETES[c.rar].n}</td>${Object.keys(STATS).map(k=>`<td>${c.st[k]}</td>`).join('')}<td>${c.sp}</td></tr>`).join('')+'</tbody></table>'}
+  $('c-col').innerHTML=dep?'':'<div class="cards" style="justify-content:flex-start">'+collection().map(c=>{const q=xv.indexOf(c.id);return `<div class="carteF fiche" style="--c:${RARETES[c.rar].c}">${q>=0?`<span class="badge">XV n°${q+1}</span>`:''}${fiche(c)}</div>`}).join('')+'</div>'}
 function finMatch(res){const n=RECOMPENSES[res];CAR.boosters+=n;sauve();return ` · +${n} booster${n>1?'s':''} gagné${n>1?'s':''} !`}
 /* ---- branchements ---- */
 let coul=COULEURS[0];
