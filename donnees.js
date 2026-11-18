@@ -32,9 +32,12 @@ const BOOSTER={cartes:5,depart:3}; // cartes par booster ; boosters de départ (
 const RECOMPENSES={victoire:2,nul:1,defaite:1}; // boosters gagnés après un match de carrière
 const COULEURS=['#2f6fe4','#e0a526','#8e44ad','#1fa38a','#e8e8e8','#e4572e'];
 const TOUS=Object.keys(SPEC); // toutes les spécialités possibles
+const BIO={1:[178,190,112,126],2:[175,185,100,112],3:[178,190,112,126],4:[196,207,112,122],5:[196,207,112,122],6:[185,196,100,110],7:[185,196,100,110],8:[190,198,105,115],9:[168,178,78,88],10:[175,185,83,93],11:[178,188,86,96],12:[180,190,93,103],13:[180,190,93,103],14:[178,188,86,96],15:[180,190,87,97]}; // taille min, max, poids min, max par poste
+const NATS=['France','Angleterre','Irlande','Écosse','Pays de Galles','Italie','Nouvelle-Zélande','Afrique du Sud','Australie','Argentine','Fidji','Samoa','Géorgie','Japon'];
 const POOL=(()=>{let a=20260101;const r=()=>{a=(a+0x6D2B79F5)|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+ let b2=777;const r2=()=>{b2=(b2+0x6D2B79F5)|0;let t=Math.imul(b2^b2>>>15,1|b2);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296},rb=(x,y)=>x+Math.floor(r2()*(y-x+1));
  const ri=(x,y)=>x+Math.floor(r()*(y-x+1)),pk=l=>l[Math.floor(r()*l.length)],out=[];let id=0;
  POSTES.forEach(([num,poste,st,sp])=>{for(let k=0;k<20;k++){let t=r()*100,rar='commun';for(const q in RARETES)if((t-=RARETES[q].w)<0){rar=q;break}
   const s={};for(const x in st)s[x]=Math.max(1,Math.min(10,st[x]+ri(-1,1)+RARETES[rar].b));
-  out.push({id:'j'+(++id),nom:pk(PRE)+' '+pk(NOM),num,poste,st:s,sp:r()<RARETES[rar].sp?pk(TOUS):sp,rar})}});return out})(); // 300 joueurs, toujours les mêmes
+  out.push({id:'j'+(++id),nom:pk(PRE)+' '+pk(NOM),num,poste,st:s,sp:r()<RARETES[rar].sp?pk(TOUS):sp,rar,age:rb(20,36),taille:rb(BIO[num][0],BIO[num][1]),poids:rb(BIO[num][2],BIO[num][3]),nat:NATS[rb(0,NATS.length-1)],photo:''})}});return out})(); // 300 joueurs, toujours les mêmes
 let TIR_BASE=25,TIR_K=7,DIST_FREE=20,DIST_K=1.2,DIST_MAX=55,PEN_CHANCE=30,MEL_SENS=2; // tir au but, pénalités, mêlée
