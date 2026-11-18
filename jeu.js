@@ -16,7 +16,7 @@ const dis=()=>S.hole||S.late; // défense désorganisée : trou laissé par une 
 function choose(passed){
   const bx=S.ax,by=S.ball==='me'?1-S.pos/100:S.pos/100;
   const near=(s,ok)=>{const w={};dots.filter(p=>p.s===s&&ok(p.i)).forEach(p=>{const q=S.reset?slot(p):{x:p.lx,y:p.ly};w[p.i]=1/Math.pow(Math.hypot(q.x-bx,q.y-by)+.08,2)});return +pick(w)};
-  const old=S.ci;S.ci=near(S.ball,i=>passed?(i>=8&&i!==old):true);S.di=near(other(S.ball),()=>true);if(S.kick){S.ci=9;S.di=14}}
+  const old=S.ci;S.ci=near(S.ball,i=>passed?(i>=8&&i!==old):true);S.di=near(other(S.ball),()=>true);if(S.kick){S.ci=9;S.di=14}if(S.conv||S.pen){S.ci=tireur(S.ball);S.di=14}}
 const C=()=>S.eq[S.ball][S.ci],D=()=>S.eq[other(S.ball)][S.di];
 /* ====== AFFICHAGE ====== */
 const $=id=>document.getElementById(id);
@@ -24,6 +24,8 @@ function card(p,side){return `<div class="card ${side}"><h2>${p.nom}</h2><small>
 function log(t){$('log').textContent=t}
 function turn(){
   retarget();
+  if(S.conv){turnConv();return}
+  if(S.pen){turnPen();return}
   if(S.kick){turnKick();return}
   const me=S.ball==='me',c=C(),d=D(),zp=ZONES.find(z=>S.pos<=z[0])[1];
   $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
@@ -61,6 +63,48 @@ function kickoff(choice){
   moveBall(prev,'Pied',S.ax,ey);choose();log(msg);
   const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300);
 }
+/* ====== FIN D'ACTION, TIR AU BUT, PÉNALITÉS, MÊLÉE ====== */
+function suite(msg){
+  $('sm').textContent=S.sc.me;$('sa').textContent=S.sc.ai;
+  const pend=S.conv||S.pen;
+  if(!pend&&!S.mt&&S.n>=PAR_MI_TEMPS){S.mt=true;S.ball=other(S.first);S.pos=50;S.hole=false;S.ax=.5;S.reset=true;S.kick=true;choose();msg+=' — MI-TEMPS.'}
+  log(msg);
+  if(!pend&&S.n>=2*PAR_MI_TEMPS){fin(msg);return}
+  const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300)}
+function fin(msg){S.end=true;const r=S.sc.me>S.sc.ai?'Victoire !':S.sc.me<S.sc.ai?'Défaite.':'Match nul.';log(msg+' — FIN DU MATCH : '+r+(MODE==='carriere'?finMatch(S.sc.me>S.sc.ai?'victoire':S.sc.me<S.sc.ai?'defaite':'nul'):''));const b=document.createElement('button');b.textContent=MODE==='carriere'?'Retour à la carrière':'Rejouer';b.onclick=MODE==='carriere'?()=>go('car'):init;$('acts').innerHTML='';$('acts').appendChild(b);}
+const tireur=t=>S.eq[t].reduce((b,p,i)=>p.st.tb>S.eq[t][b].st.tb?i:b,0);
+const pTir=(k,dist)=>cl(TIR_BASE+TIR_K*k.st.tb+(has(k,'tb')?SPEC_BONUS:0)-(dist==null?0:DIST_K*Math.max(0,dist-DIST_FREE)),5,95);
+function melee(at){const f=t=>1.2*(t[0].st.me+t[1].st.me+t[2].st.me)+t.slice(3,8).reduce((s,p)=>s+p.st.me,0),A=f(S.eq[at]),B=f(S.eq[other(at)]);return cl(50+MEL_SENS*100*(A-B)/(A+B),10,90)}
+function ecran(titre,zone,hint,btns){
+  const me=S.ball==='me',c=C(),d=D();
+  $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
+  $('t-half').textContent=(S.n<PAR_MI_TEMPS?'1re':'2e')+' mi-temps · '+titre;$('t-zone').textContent=zone;
+  $('t-state').textContent=me?'Tireur : '+c.nom:'Tireur adverse : '+c.nom;$('t-state').className='tag';$('hint').textContent=hint;
+  const a=$('acts');a.innerHTML='';
+  btns.forEach(([lab,pct,fn,off])=>{const b=document.createElement('button');b.innerHTML=`<span>${lab}</span><b>${OPT.pct&&pct!=null?pct+' %':''}</b>`;b.disabled=!!off;b.onclick=fn;a.appendChild(b)})}
+function turnConv(){const me=S.ball==='me',c=C();
+  ecran('transformation',me?'Tu tentes la transformation':'L\'adversaire tente la transformation',me?'Seule la stat Tir au but du tireur compte.':'Regarde la transformation adverse.',
+   [[me?'Tenter la transformation':'Voir la transformation adverse',pTir(c),convRes]])}
+function convRes(){
+  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
+  const k=C(),ok=R(1,100)<=pTir(k);S.conv=false;if(ok)S.sc[S.ball]+=2;
+  const msg=`${k.nom} : transformation ${ok?'réussie (+2) !':'manquée.'}`;
+  S.ball=other(S.ball);S.pos=50;S.hole=false;S.press=false;S.ax=.5;S.reset=true;S.kick=true;choose();suite(msg)}
+function turnPen(){const me=S.ball==='me',c=C(),dist=100-S.pos;
+  ecran('pénalité',(me?'Pénalité pour toi':'Pénalité contre toi')+' · '+dist+' m des poteaux',me?'Choisis : touche, tir au but, mêlée ou jeu à la main.':'L\'adversaire va décider.',
+   me?[['Aller en touche',null,()=>penRes('touche')],['Tirer au but'+(dist>DIST_MAX?' (trop loin)':''),pTir(c,dist),()=>penRes('tir'),dist>DIST_MAX],['Mêlée',Math.round(melee('me')),()=>penRes('melee')],['Jouer à la main',null,()=>penRes('main')]]:[['Voir la décision adverse',null,()=>penRes('auto')]])}
+function penRes(ch){
+  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
+  const at=S.ball,df=other(at),k=C(),dist=100-S.pos,prev={s:at,i:S.ci};let t=ch;
+  if(at==='ai')t=dist<=40?'tir':dist<=DIST_MAX?(Math.random()<.5?'tir':'touche'):(Math.random()<.7?'touche':'melee');
+  S.pen=false;S.hole=false;S.press=false;let msg='Pénalité : ';
+  if(t==='tir'){const ok=R(1,100)<=pTir(k,dist);msg+=`${k.nom} tente les poteaux (${dist} m) : `;
+    if(ok){S.sc[at]+=3;msg+='réussi (+3) !';S.ball=df;S.pos=50;S.ax=.5;S.reset=true;S.kick=true}else{msg+='manqué, renvoi aux 22 m.';S.ball=df;S.pos=22;S.ax=R(30,70)/100}}
+  else if(t==='touche'){const g=R(20,35)+k.st.pi-5;S.pos=Math.min(S.pos+g,97);S.ax=Math.random()<.5?.08:.92;const w=R(1,100)<=cl(60+4*(S.eq[at][1].st.la-5),30,90);
+    msg+=`touche trouvée (+${g} m), lancer ${w?'gagné.':'perdu, ballon à l\'adversaire.'}`;if(!w){S.ball=df;S.pos=100-S.pos}}
+  else if(t==='melee'){const w=R(1,100)<=melee(at);msg+=w?'mêlée gagnée, la défense est désorganisée !':'mêlée perdue, ballon à l\'adversaire.';if(w)S.hole=true;else{S.ball=df;S.pos=100-S.pos}}
+  else msg+='jeu à la main, la défense recule.';
+  moveBall(prev,'Pied',S.ax,S.ball==='me'?1-S.pos/100:S.pos/100);choose();if(t==='main')S.ci=8;suite(msg)}
 /* ====== TOUR DE JEU ====== */
 function play(choice){
   if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
@@ -72,19 +116,16 @@ function play(choice){
   let nx=cx;if(X.kick)nx=R(15,85)/100;else if(ok)nx=cx+(a==='Percussion'?R(-4,4):(Math.random()<.5?-1:1)*R(10,20))/100;S.ax=cl(nx,.06,.94);
   S.press=false;
   if(X.kick){const gain=ok?R(...X.g):R(5,10);S.pos=Math.min(S.pos+gain,97);msg+=ok?`Réussi : ${gain} m gagnés au pied.`:`Coup de pied court (${gain} m).`;flip=true;if(ok&&X.press){S.press=true;msg+=' Pression sur le receveur !'}}
-  else if(ok){const gain=R(...X.g);S.pos+=gain;msg+=`Réussi : +${gain} m.`;S.hole=(po==='co'||po==='an');if(S.hole)msg+=' La défense est désorganisée !';if(a==='Conservation')S.hole=false;pass=a==='Passe'}
+  else if(ok){const gain=R(...X.g);S.pos+=gain;msg+=`Réussi : +${gain} m.`;S.hole=(po==='co'||po==='an');if(S.hole)msg+=' La défense est désorganisée !';if(a==='Conservation')S.hole=false;pass=a==='Passe';if(po==='co'&&R(1,100)<=PEN_CHANCE){S.pen=true;msg+=' Faute de la défense dans le regroupement : pénalité !'}}
   else{S.hole=false;
     if(a==='Passe'){flip=true;msg+=(po==='an'&&R(1,100)<=INT_BASE+INT_K*d.st.an+(has(d,'an')?15:0))?'Interception !':'En-avant, ballon perdu.'}
     else{const g=R(0,2);S.pos+=g;msg+=`Plaqué (+${g} m).`;
       if(po==='co'&&R(1,100)<=REC_BASE+REC_K*d.st.co+(has(d,'co')?15:0)){flip=true;msg+=' Ballon récupéré au sol, turnover !'}}}
   const tryNow=!flip&&S.pos>=100,ey=tryNow?(pd<0?.02:.98):(S.ball==='me'?1-S.pos/100:S.pos/100);moveBall(prev,a,S.ax,ey);
-  if(tryNow){S.ax=.5;S.reset=true;const kp=R(1,100)<=40+5*c.st.pi;S.sc[S.ball]+=5+(kp?2:0);msg=`${c.nom} : ESSAI ! ${kp?'Transformé (+7).':'Transformation ratée (+5).'}`;S.ball=other(S.ball);S.pos=50;S.hole=false;pass=false;S.kick=true;choose()}
+  if(tryNow){S.reset=true;S.sc[S.ball]+=5;S.pen=false;msg=`${c.nom} : ESSAI ! (+5) Place à la transformation.`;S.pos=98;S.hole=false;pass=false;S.conv=true;choose()}
   else if(flip){S.ball=other(S.ball);S.pos=100-S.pos;S.hole=false;choose()}
   else choose(pass);
-  S.n++;$('sm').textContent=S.sc.me;$('sa').textContent=S.sc.ai;log(msg);
-  if(S.n===PAR_MI_TEMPS){S.ball=other(S.first);S.pos=50;S.hole=false;S.ax=.5;S.reset=true;S.kick=true;choose();log(msg+' — MI-TEMPS.')}
-  if(S.n>=2*PAR_MI_TEMPS){S.end=true;const r=S.sc.me>S.sc.ai?'Victoire !':S.sc.me<S.sc.ai?'Défaite.':'Match nul.';log(msg+' — FIN DU MATCH : '+r+(MODE==='carriere'?finMatch(S.sc.me>S.sc.ai?'victoire':S.sc.me<S.sc.ai?'defaite':'nul'):''));const b=document.createElement('button');b.textContent=MODE==='carriere'?'Retour à la carrière':'Rejouer';b.onclick=MODE==='carriere'?()=>go('car'):init;$('acts').innerHTML='';$('acts').appendChild(b);return}
-  const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300);
+  S.n++;suite(msg);
 }
 function aiAtt(){const w={Percussion:30,Duel:15,Passe:25,Conservation:10,PiedTactique:10,PiedPression:10};if(S.pos<25){w.PiedTactique+=30;w.PiedPression+=15}if(S.pos>75){w.Percussion+=25;w.PiedTactique=0;w.PiedPression=0}return pick(w)}
 function aiDef(){return pick({pl:40,mo:25,an:20,co:15})}
