@@ -17,10 +17,11 @@ table{border-collapse:collapse;width:100%}td,th{padding:3px 4px;text-align:left;
 <section><h2>Matrice des confrontations</h2><div class="wrap"><table id="s-m"></table></div><p class="note">Bonus ou malus (en points de %) sur la réussite de l'attaque, selon la stat offensive (en ligne) et la posture défensive choisie (en colonne).</p></section>
 <section><h2>Raretés des cartes</h2><div class="wrap"><table id="s-rar"></table></div></section>
 <section><h2>Boosters et récompenses</h2><div class="grid" id="s-boo"></div></section>
-<section><h2>Joueurs <small id="n-j" style="font-weight:400;opacity:.75"></small></h2>
-<div class="grid" style="margin-bottom:8px"><label>Poste<select id="f-num"></select></label><label>Rareté<select id="f-rar"></select></label><label>Nom<input id="f-q" placeholder="Rechercher"></label><label>&nbsp;<button id="add">+ Ajouter un joueur</button></label></div>
-<div class="wrap"><table id="s-j"></table></div><p class="note">Les 120 premiers résultats du filtre sont affichés. Supprimer un joueur le retire aussi des collections déjà enregistrées.</p></section></main>
-<script src="donnees.js"></script><script src="surcharge.js"></script>
+<section><h2>Base de données joueurs</h2>
+<p class="note" style="margin:0 0 8px">La base est le fichier <b>joueurs.csv</b>, à modifier dans Excel ou Google Sheets (enregistrer en « CSV UTF-8 », séparateur « ; »). Place-le à côté de <b>index.html</b>, et les images dans le dossier <b>photos</b> (colonne « photo » : par exemple photos/dupont.jpg).</p>
+<div id="s-base"></div>
+<div class="grid" style="margin-top:10px;align-items:end"><div><button id="dl-csv">Télécharger la base actuelle (CSV)</button></div><label>Vérifier un fichier CSV avant de le publier<input type="file" id="chk" accept=".csv,text/csv"></label></div><div id="chk-res"></div></section></main>
+<script src="donnees.js"></script><script src="base.js"></script><script src="surcharge.js"></script>
 <script>
 const $=id=>document.getElementById(id),N=(v,a,b)=>Math.min(b,Math.max(a,parseFloat(v)||0)),gv=n=>(0,eval)(n),sv=(n,v)=>(0,eval)(n+'='+v),esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const REG=[['PAR_MI_TEMPS','Actions par mi-temps',1,60,1],['HOLE_BONUS','Bonus d\'attaque si défense désorganisée',0,50,1],['SPEC_BONUS','Bonus de spécialité',0,40,1],['ECART','Poids d\'un point d\'écart de stat',0,10,.5],['DEPLACEMENT_MAX','Déplacement max par action (0 à 1)',.05,1,.05],['SEUIL_PLACE','Distance « joueur en place » (0 à 1)',.02,.5,.01],['MIN_EN_PLACE','Défenseurs en place minimum (sur 15)',0,15,1],['REC_BASE','Récupération au sol : chance de base (%)',0,50,1],['REC_K','Récupération au sol : poids du Contest',0,10,.5],['INT_BASE','Interception : chance de base (%)',0,50,1],['INT_K','Interception : poids de l\'Anticipation',0,10,.5],['PRESS_MALUS','Malus du receveur après un jeu au pied de pression',0,40,1],['TIR_BASE','Tir au but : chance de base (%)',0,60,1],['TIR_K','Tir au but : poids de la stat Tir au but',0,15,.5],['DIST_FREE','Pénalité : distance sans malus (m)',0,50,1],['DIST_K','Pénalité : malus par mètre au-delà',0,5,.1],['DIST_MAX','Pénalité : distance maximale du tir (m)',20,80,1],['PEN_CHANCE','Pénalité : chance de faute de la défense (%)',0,50,1],['MEL_SENS','Mêlée : sensibilité à l\'écart des packs',0,5,.5]];
@@ -32,18 +33,11 @@ function renderAll(){
  $('s-m').innerHTML='<tr><th>Attaque \\ Défense</th>'+P4.map(p=>`<th>${STATS[p]}</th>`).join('')+'</tr>'+D.map(d=>`<tr><td>${STATS[d]}</td>`+P4.map(p=>`<td>${inp(`data-m="${d}" data-x="${p}"`,MATRICE[d][p],-40,40,1)}</td>`).join('')+'</tr>').join('');
  $('s-rar').innerHTML='<tr><th>Rareté</th><th>Bonus de stats</th><th>Chance de spécialité aléatoire (0 à 1)</th><th>Poids de tirage</th></tr>'+RK.map(k=>`<tr><td>${RARETES[k].n}</td><td>${inp(`data-q="${k}" data-f="b"`,RARETES[k].b,0,5,1)}</td><td>${inp(`data-q="${k}" data-f="sp"`,RARETES[k].sp,0,1,.05)}</td><td>${inp(`data-q="${k}" data-f="w"`,RARETES[k].w,0,100,1)}</td></tr>`).join('');
  $('s-boo').innerHTML=`<label>Cartes par booster${inp('data-o="cartes"',BOOSTER.cartes,1,15,1)}</label><label>Boosters de départ (doit diviser 15)<select data-o="depart">${[1,3,5,15].map(v=>`<option${v===BOOSTER.depart?' selected':''}>${v}</option>`).join('')}</select></label>`+['victoire','nul','defaite'].map(k=>`<label>Boosters gagnés : ${k}${inp('data-w="'+k+'"',RECOMPENSES[k],0,10,1)}</label>`).join('');
- $('f-num').innerHTML='<option value="">Tous les postes</option>'+POSTES.map(([n,s])=>`<option value="${n}">${n} ${s}</option>`).join('');
- $('f-rar').innerHTML='<option value="">Toutes les raretés</option>'+RK.map(k=>`<option value="${k}">${RARETES[k].n}</option>`).join('');
- renderJ()}
-function renderJ(){
- const fp=$('f-num').value,fr=$('f-rar').value,q=($('f-q').value||'').toLowerCase(),l=POOL.filter(p=>(!fp||p.num==fp)&&(!fr||p.rar===fr)&&(!q||p.nom.toLowerCase().includes(q)));
- $('n-j').textContent='— '+POOL.length+' au total, '+l.length+' correspondent au filtre';
- const o=(at)=>at;
- $('s-j').innerHTML='<tr><th>Nom</th><th>Poste</th><th>Rareté</th>'+Object.values(STATS).map(x=>`<th>${x}</th>`).join('')+'<th>Spécialité</th><th></th></tr>'+l.slice(0,120).map(p=>`<tr><td><input data-j="${p.id}" data-f="nom" value="${esc(p.nom)}"></td>
-<td><select data-j="${p.id}" data-f="num">${POSTES.map(([n,s])=>`<option value="${n}"${n===p.num?' selected':''}>${n} ${s}</option>`).join('')}</select></td>
-<td><select data-j="${p.id}" data-f="rar">${RK.map(k=>`<option value="${k}"${k===p.rar?' selected':''}>${RARETES[k].n}</option>`).join('')}</select></td>
-${Object.keys(STATS).map(k=>`<td>${inp(`class="num" data-j="${p.id}" data-f="st.${k}"`,p.st[k],1,10,1)}</td>`).join('')}
-<td><select data-j="${p.id}" data-f="sp">${TOUS.map(x=>`<option${x===p.sp?' selected':''}>${x}</option>`).join('')}</select></td><td><button class="sec" data-del="${p.id}" aria-label="Supprimer">✕</button></td></tr>`).join('')}
+ PRET.then(renderBase)}
+function renderBase(){$('s-base').innerHTML=`<p>Base chargée : <b>${esc(SOURCE_BASE)}</b> — ${POOL.length} joueurs.</p>`+(ERREURS_BASE.length?`<p class="warn">${ERREURS_BASE.length} problème(s) dans joueurs.csv : ces lignes sont ignorées par le jeu. Utilise la vérification ci-dessous.</p>`:'')+tableBilan(POOL)}
+$('dl-csv').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([versCSV(POOL)],{type:'text/csv;charset=utf-8'}));a.download='joueurs.csv';a.click()};
+$('chk').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const {joueurs,erreurs}=lireJoueurs(decoder(r.result));
+  $('chk-res').innerHTML=`<p><b>${joueurs.length}</b> joueur(s) valide(s), <b>${erreurs.length}</b> problème(s).${POSTES.every(p=>joueurs.some(j=>j.num===p[0]))?'':' <span style="color:#ff8a7e">Il manque au moins un poste : le jeu ignorera ce fichier.</span>'}</p>`+(erreurs.length?'<ul>'+erreurs.slice(0,80).map(x=>`<li>${esc(x)}</li>`).join('')+'</ul>':'')+tableBilan(joueurs)};r.readAsArrayBuffer(f)};
 document.addEventListener('input',e=>{const t=e.target,d=t.dataset||{},v=t.value;
  if(d.r){const g=REG.find(x=>x[0]===d.r);sv(d.r,N(v,g[2],g[3]))}
  else if(d.a){const x=ATT[d.a];if(d.f==='b')x.b=N(v,5,95);else x.g[d.f==='g0'?0:1]=N(v,0,60)}
@@ -51,18 +45,14 @@ document.addEventListener('input',e=>{const t=e.target,d=t.dataset||{},v=t.value
  else if(d.q)RARETES[d.q][d.f]=N(v,0,d.f==='sp'?1:d.f==='b'?5:100);
  else if(d.o)BOOSTER[d.o]=+v;
  else if(d.w)RECOMPENSES[d.w]=N(v,0,10);
- else if(d.j){const p=POOL.find(x=>x.id===d.j);if(!p)return;const f=d.f;
-  if(f==='nom')p.nom=v;else if(f==='num'){p.num=+v;p.poste=POSTES.find(x=>x[0]===+v)[1]}else if(f==='rar')p.rar=v;else if(f==='sp')p.sp=v;else if(f.startsWith('st.'))p.st[f.slice(3)]=Math.round(N(v,1,10))}
- else if(t.id==='f-num'||t.id==='f-rar'||t.id==='f-q')renderJ()});
-document.addEventListener('click',e=>{const id=e.target.dataset&&e.target.dataset.del;if(!id)return;const i=POOL.findIndex(x=>x.id===id);if(i>=0&&confirm('Supprimer ce joueur ?')){POOL.splice(i,1);renderJ()}});
-$('add').onclick=()=>{const n=+($('f-num').value||1),pr=POSTES.find(x=>x[0]===n);POOL.unshift({id:'j'+(Math.max(0,...POOL.map(p=>+p.id.slice(1)))+1),nom:'Nouveau joueur',num:n,poste:pr[1],st:{...pr[2]},sp:pr[3],rar:'commun'});renderJ()};
+});
 function genere(){const L=['/* Généré par admin.html : à placer dans le même dossier que index.html */'];
  L.push(REG.map(([n])=>n+'='+gv(n)).join(';')+';');
  L.push('Object.assign(BOOSTER,'+JSON.stringify(BOOSTER)+');Object.assign(RECOMPENSES,'+JSON.stringify(RECOMPENSES)+');');
  for(const k of RK){const {b,sp,w}=RARETES[k];L.push(`Object.assign(RARETES[${JSON.stringify(k)}],${JSON.stringify({b,sp,w})});`)}
  for(const a of A){const {b,g}=ATT[a];L.push(`Object.assign(ATT[${JSON.stringify(a)}],${JSON.stringify({b,g})});`)}
  for(const d of D)L.push(`Object.assign(MATRICE[${JSON.stringify(d)}],${JSON.stringify(MATRICE[d])});`)
- L.push('POOL.splice(0,POOL.length,...[\n'+POOL.map(p=>JSON.stringify(p)).join(',\n')+'\n]);');return L.join('\n')+'\n'}
+ return L.join('\n')+'\n'}
 $('exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([genere()],{type:'text/javascript'}));a.download='surcharge.js';a.click()};
 renderAll();
 </script></body></html>
