@@ -10,13 +10,13 @@ const POST=Object.keys(MATRICE.pu);
 function pAtt(A,D,a,po){const x=ATT[a];return cl(x.b+ECART*(A.st[x.s]-D.st[po])+MATRICE[x.s][po]+(dis()?HOLE_BONUS:0)-(S.press?PRESS_MALUS:0)+(has(A,a)?SPEC_BONUS:0)-(has(D,po)?8:0),5,95)}
 /* ====== ÉTAT ====== */
 let S;
-function init(){S={eq:{me:(MODE==='carriere'&&XV)?XV:MON_EQUIPE,ai:team()},sc:{me:0,ai:0},ball:'me',pos:40,hole:false,n:0,busy:false,end:false,ci:8,di:0,ax:.5,late:false,reset:true};draw();dots.forEach(p=>{const t=slot(p);p.lx=p.x=p.tx=t.x;p.ly=p.y=p.ty=t.y});choose();log('Coup d\'envoi : tu as le ballon.');turn()}
+function init(){S={eq:{me:(MODE==='carriere'&&XV)?XV:MON_EQUIPE,ai:team()},sc:{me:0,ai:0},ball:'me',first:'me',kick:true,pos:50,hole:false,n:0,busy:false,end:false,ci:8,di:0,ax:.5,late:false,reset:true};draw();dots.forEach(p=>{const t=slot(p);p.lx=p.x=p.tx=t.x;p.ly=p.y=p.ty=t.y});choose();log('Coup d\'envoi : tu as le ballon.');turn()}
 const other=b=>b==='me'?'ai':'me';
 const dis=()=>S.hole||S.late; // défense désorganisée : trou laissé par une action OU joueurs hors de position
 function choose(passed){
   const bx=S.ax,by=S.ball==='me'?1-S.pos/100:S.pos/100;
   const near=(s,ok)=>{const w={};dots.filter(p=>p.s===s&&ok(p.i)).forEach(p=>{const q=S.reset?slot(p):{x:p.lx,y:p.ly};w[p.i]=1/Math.pow(Math.hypot(q.x-bx,q.y-by)+.08,2)});return +pick(w)};
-  const old=S.ci;S.ci=near(S.ball,i=>passed?(i>=8&&i!==old):true);S.di=near(other(S.ball),()=>true)}
+  const old=S.ci;S.ci=near(S.ball,i=>passed?(i>=8&&i!==old):true);S.di=near(other(S.ball),()=>true);if(S.kick){S.ci=9;S.di=14}}
 const C=()=>S.eq[S.ball][S.ci],D=()=>S.eq[other(S.ball)][S.di];
 /* ====== AFFICHAGE ====== */
 const $=id=>document.getElementById(id);
@@ -24,6 +24,7 @@ function card(p,side){return `<div class="card ${side}"><h2>${p.nom}</h2><small>
 function log(t){$('log').textContent=t}
 function turn(){
   retarget();
+  if(S.kick){turnKick();return}
   const me=S.ball==='me',c=C(),d=D(),zp=ZONES.find(z=>S.pos<=z[0])[1];
   $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
   $('t-half').textContent=(S.n<PAR_MI_TEMPS?'1re':'2e')+' mi-temps · action '+(S.n%PAR_MI_TEMPS+1)+'/'+PAR_MI_TEMPS;
@@ -35,6 +36,30 @@ function turn(){
   if(me)Object.keys(ATT).forEach(k=>add(k,Math.round(POST.reduce((s,po)=>s+pAtt(c,d,k,po),0)/POST.length),LIB[k],has(c,k)));
   else POST.forEach(po=>add(po,100-Math.round(Object.keys(ATT).reduce((s,a)=>s+pAtt(c,d,a,po),0)/Object.keys(ATT).length),STATS[po],has(d,po)));
   function add(k,pct,lab,star){const b=document.createElement('button');b.innerHTML=`<span>${lab}${star?' ★':''}</span><b>${OPT.pct?pct+' %':''}</b>`;b.onclick=()=>play(k);a.appendChild(b)}
+}
+/* ====== COUP D'ENVOI : long ou court ====== */
+function turnKick(){
+  const me=S.ball==='me',c=C(),d=D();
+  $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
+  $('t-half').textContent=(S.n<PAR_MI_TEMPS?'1re':'2e')+' mi-temps · coup d\'envoi';
+  $('t-zone').textContent=me?'Tu donnes le coup d\'envoi':'L\'adversaire donne le coup d\'envoi';
+  $('t-state').textContent='Ballon posé sur la ligne médiane';$('t-state').className='tag';
+  $('hint').textContent=me?'Long : le ballon file loin, sans contestation. Court : il retombe près de la ligne médiane et tu peux le récupérer.':'Reçois le coup d\'envoi.';
+  const a=$('acts');a.innerHTML='';
+  const mk=(t,lab)=>{const b=document.createElement('button');b.innerHTML=`<span>${lab}</span><b></b>`;b.onclick=()=>kickoff(t);a.appendChild(b)};
+  if(me){mk('long','Coup d\'envoi long');mk('court','Coup d\'envoi court')}else mk('auto','Recevoir le coup d\'envoi');
+}
+function kickoff(choice){
+  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
+  const me=S.ball==='me',k=C(),r=D(),t=me?choice:(Math.random()<.6?'long':'court'),prev={s:S.ball,i:S.ci};
+  let rp,keep=false,msg=`${k.nom} : coup d'envoi ${t}. `;
+  if(t==='long'){rp=cl(R(14,30)-(k.st.pi-5),8,32);msg+=`Le ballon file jusqu'aux ${rp} m de la ligne adverse, sans contestation.`}
+  else{rp=R(38,46);const pr=cl(25+4*(k.st.pi-r.st.an),10,60);keep=R(1,100)<=pr;msg+=keep?'Le ballon retombe près de la ligne médiane et il est récupéré !':'Le ballon retombe près de la ligne médiane, le receveur le garde.'}
+  const ey=S.ball==='me'?rp/100:1-rp/100; // hauteur d'atterrissage vue du terrain
+  S.kick=false;S.hole=false;S.press=false;S.ax=R(25,75)/100;
+  if(keep)S.pos=100-rp;else{S.ball=other(S.ball);S.pos=rp}
+  moveBall(prev,'Pied',S.ax,ey);choose();log(msg);
+  const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300);
 }
 /* ====== TOUR DE JEU ====== */
 function play(choice){
@@ -53,11 +78,11 @@ function play(choice){
     else{const g=R(0,2);S.pos+=g;msg+=`Plaqué (+${g} m).`;
       if(po==='co'&&R(1,100)<=REC_BASE+REC_K*d.st.co+(has(d,'co')?15:0)){flip=true;msg+=' Ballon récupéré au sol, turnover !'}}}
   const tryNow=!flip&&S.pos>=100,ey=tryNow?(pd<0?.02:.98):(S.ball==='me'?1-S.pos/100:S.pos/100);moveBall(prev,a,S.ax,ey);
-  if(tryNow){S.ax=.5;S.reset=true;const kp=R(1,100)<=40+5*c.st.pi;S.sc[S.ball]+=5+(kp?2:0);msg=`${c.nom} : ESSAI ! ${kp?'Transformé (+7).':'Transformation ratée (+5).'}`;S.ball=other(S.ball);S.pos=50;S.hole=false;pass=false;choose()}
+  if(tryNow){S.ax=.5;S.reset=true;const kp=R(1,100)<=40+5*c.st.pi;S.sc[S.ball]+=5+(kp?2:0);msg=`${c.nom} : ESSAI ! ${kp?'Transformé (+7).':'Transformation ratée (+5).'}`;S.ball=other(S.ball);S.pos=50;S.hole=false;pass=false;S.kick=true;choose()}
   else if(flip){S.ball=other(S.ball);S.pos=100-S.pos;S.hole=false;choose()}
   else choose(pass);
   S.n++;$('sm').textContent=S.sc.me;$('sa').textContent=S.sc.ai;log(msg);
-  if(S.n===PAR_MI_TEMPS){S.ball=other(S.ball);S.pos=50;S.hole=false;S.ax=.5;S.reset=true;choose();log(msg+' — MI-TEMPS : coup d\'envoi pour l\'autre équipe.')}
+  if(S.n===PAR_MI_TEMPS){S.ball=other(S.first);S.pos=50;S.hole=false;S.ax=.5;S.reset=true;S.kick=true;choose();log(msg+' — MI-TEMPS.')}
   if(S.n>=2*PAR_MI_TEMPS){S.end=true;const r=S.sc.me>S.sc.ai?'Victoire !':S.sc.me<S.sc.ai?'Défaite.':'Match nul.';log(msg+' — FIN DU MATCH : '+r+(MODE==='carriere'?finMatch(S.sc.me>S.sc.ai?'victoire':S.sc.me<S.sc.ai?'defaite':'nul'):''));const b=document.createElement('button');b.textContent=MODE==='carriere'?'Retour à la carrière':'Rejouer';b.onclick=MODE==='carriere'?()=>go('car'):init;$('acts').innerHTML='';$('acts').appendChild(b);return}
   const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300);
 }
