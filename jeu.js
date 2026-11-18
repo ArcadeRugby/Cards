@@ -20,7 +20,7 @@ function choose(passed){
 const C=()=>S.eq[S.ball][S.ci],D=()=>S.eq[other(S.ball)][S.di];
 /* ====== AFFICHAGE ====== */
 const $=id=>document.getElementById(id);
-function card(p,side){return `<div class="card ${side}"><h2>${p.nom}</h2><small>n°${p.num} · ${p.poste}</small><div class="st">${Object.keys(STATS).map(k=>`<span>${STATS[k]}</span><div class="bar"><i style="width:${p.st[k]*10}%"></i></div>`).join('')}</div><div class="sp">Spécialité : ${p.sp}</div></div>`}
+function card(p,side){return `<div class="card ${side}" style="text-align:center">${avatar(p,'pm')}</div>`}
 function log(t){$('log').textContent=t}
 function turn(){
   retarget();
