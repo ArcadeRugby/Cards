@@ -1,179 +1,59 @@
-/* ====== OUTILS ====== */
-const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1)),cl=(v,a,b)=>Math.max(a,Math.min(b,v));
-const pick=w=>{let t=Object.values(w).reduce((a,b)=>a+b,0),r=Math.random()*t;for(const k in w)if((r-=w[k])<0)return k;return Object.keys(w)[0]};
-const shuf=a=>a.map(x=>[Math.random(),x]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
-function team(){const p=shuf(PRE),n=shuf(NOM);return POSTES.map(([num,poste,st,sp],i)=>{const s={};for(const k in st)s[k]=cl(st[k]+R(-1,1),1,10);return{num,poste,st:s,sp,nom:p[i]+' '+n[i]}})}
-const MON_EQUIPE=team();
-/* ====== RÈGLE DE RÉSOLUTION ====== */
-const has=(p,c)=>(SPEC[p.sp]||[]).includes(c);
-const POST=Object.keys(MATRICE.pu);
-function pAtt(A,D,a,po){const x=ATT[a];return cl(x.b+ECART*(A.st[x.s]-D.st[po])+MATRICE[x.s][po]+(dis()?HOLE_BONUS:0)-(S.press?PRESS_MALUS:0)+(has(A,a)?SPEC_BONUS:0)-(has(D,po)?8:0),5,95)}
-/* ====== ÉTAT ====== */
-let S;
-function init(){S={eq:{me:(MODE==='carriere'&&XV)?XV:MON_EQUIPE,ai:team()},sc:{me:0,ai:0},ball:'me',first:'me',kick:true,pos:50,hole:false,n:0,busy:false,end:false,ci:8,di:0,ax:.5,late:false,reset:true};S.roles={me:(MODE==='carriere'&&ROLES)||rolesAuto(S.eq.me),ai:rolesAuto(S.eq.ai)};draw();dots.forEach(p=>{const t=slot(p);p.lx=p.x=p.tx=t.x;p.ly=p.y=p.ty=t.y});choose();log('Coup d\'envoi : tu as le ballon.');turn()}
-const other=b=>b==='me'?'ai':'me';
-const dis=()=>S.hole||S.late; // défense désorganisée : trou laissé par une action OU joueurs hors de position
-function choose(passed){
-  const bx=S.ax,by=S.ball==='me'?1-S.pos/100:S.pos/100;
-  const near=(s,ok)=>{const w={};dots.filter(p=>p.s===s&&ok(p.i)).forEach(p=>{const q=S.reset?slot(p):{x:p.lx,y:p.ly};w[p.i]=1/Math.pow(Math.hypot(q.x-bx,q.y-by)+.08,2)});return +pick(w)};
-  const old=S.ci;S.ci=near(S.ball,i=>passed?(i>=8&&i!==old):true);S.di=near(other(S.ball),()=>true);if(S.kick){S.ci=9;S.di=14}if(S.conv||S.pen){S.ci=tireur(S.ball);S.di=14}}
-const C=()=>S.eq[S.ball][S.ci],D=()=>S.eq[other(S.ball)][S.di];
-/* ====== AFFICHAGE ====== */
-const $=id=>document.getElementById(id);
-function card(p,side){return `<div class="card ${side}" style="text-align:center">${avatar(p,'pm')}</div>`}
-function log(t){$('log').textContent=t}
-function turn(){
-  retarget();
-  if(S.conv){turnConv();return}
-  if(S.pen){turnPen();return}
-  if(S.kick){turnKick();return}
-  const me=S.ball==='me',c=C(),d=D(),zp=ZONES.find(z=>S.pos<=z[0])[1];
-  $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
-  $('t-half').textContent=(S.n<PAR_MI_TEMPS?'1re':'2e')+' mi-temps · action '+(S.n%PAR_MI_TEMPS+1)+'/'+PAR_MI_TEMPS;
-  $('t-zone').textContent=(me?'Tu attaques':'Tu défends')+' · '+zp+' · '+(100-S.pos)+' m de l\'en-but';
-  $('t-state').textContent=dis()?'Défense désorganisée':'Défense organisée';$('t-state').className='tag'+(dis()?' warn':'');
-  $('hint').textContent=me?'Tu as le ballon : choisis une action (le % est une moyenne selon la défense adverse).':'L\'adversaire a le ballon : choisis ta défense (le % est l\'efficacité moyenne selon son attaque).';
-  if(!OPT.pct)$('hint').textContent=me?'Tu as le ballon : choisis une action.':'L\'adversaire a le ballon : choisis ta défense.';
-  const a=$('acts');a.innerHTML='';
-  if(me)Object.keys(ATT).forEach(k=>add(k,Math.round(POST.reduce((s,po)=>s+pAtt(c,d,k,po),0)/POST.length),LIB[k],has(c,k)));
-  else POST.forEach(po=>add(po,100-Math.round(Object.keys(ATT).reduce((s,a)=>s+pAtt(c,d,a,po),0)/Object.keys(ATT).length),STATS[po],has(d,po)));
-  function add(k,pct,lab,star){const b=document.createElement('button');b.innerHTML=`<span>${lab}${star?' ★':''}</span><b>${OPT.pct?pct+' %':''}</b>`;b.onclick=()=>play(k);a.appendChild(b)}
-}
-/* ====== COUP D'ENVOI : long ou court ====== */
-function turnKick(){
-  const me=S.ball==='me',c=C(),d=D();
-  $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
-  $('t-half').textContent=(S.n<PAR_MI_TEMPS?'1re':'2e')+' mi-temps · coup d\'envoi';
-  $('t-zone').textContent=me?'Tu donnes le coup d\'envoi':'L\'adversaire donne le coup d\'envoi';
-  $('t-state').textContent='Ballon posé sur la ligne médiane';$('t-state').className='tag';
-  $('hint').textContent=me?'Long : le ballon file loin, sans contestation. Court : il retombe près de la ligne médiane et tu peux le récupérer.':'Reçois le coup d\'envoi.';
-  const a=$('acts');a.innerHTML='';
-  const mk=(t,lab)=>{const b=document.createElement('button');b.innerHTML=`<span>${lab}</span><b></b>`;b.onclick=()=>kickoff(t);a.appendChild(b)};
-  if(me){mk('long','Coup d\'envoi long');mk('court','Coup d\'envoi court')}else mk('auto','Recevoir le coup d\'envoi');
-}
-function kickoff(choice){
-  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
-  const me=S.ball==='me',k=C(),r=D(),t=me?choice:(Math.random()<.6?'long':'court'),prev={s:S.ball,i:S.ci};
-  let rp,keep=false,msg=`${k.nom} : coup d'envoi ${t}. `;
-  if(t==='long'){rp=cl(R(14,30)-(k.st.pi-5),8,32);msg+=`Le ballon file jusqu'aux ${rp} m de la ligne adverse, sans contestation.`}
-  else{rp=R(38,46);const pr=cl(25+4*(k.st.pi-r.st.an),10,60);keep=R(1,100)<=pr;msg+=keep?'Le ballon retombe près de la ligne médiane et il est récupéré !':'Le ballon retombe près de la ligne médiane, le receveur le garde.'}
-  const ey=S.ball==='me'?rp/100:1-rp/100; // hauteur d'atterrissage vue du terrain
-  S.kick=false;S.hole=false;S.press=false;S.ax=R(25,75)/100;
-  if(keep)S.pos=100-rp;else{S.ball=other(S.ball);S.pos=rp}
-  moveBall(prev,'Pied',S.ax,ey);choose();log(msg);
-  const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300);
-}
-/* ====== FIN D'ACTION, TIR AU BUT, PÉNALITÉS, MÊLÉE ====== */
-function suite(msg){
-  $('sm').textContent=S.sc.me;$('sa').textContent=S.sc.ai;
-  const pend=S.conv||S.pen;
-  if(!pend&&!S.mt&&S.n>=PAR_MI_TEMPS){S.mt=true;S.ball=other(S.first);S.pos=50;S.hole=false;S.ax=.5;S.reset=true;S.kick=true;choose();msg+=' — MI-TEMPS.'}
-  log(msg);
-  if(!pend&&S.n>=2*PAR_MI_TEMPS){fin(msg);return}
-  const gm=S;setTimeout(()=>{if(S!==gm)return;S.busy=false;turn()},1300)}
-function fin(msg){S.end=true;const r=S.sc.me>S.sc.ai?'Victoire !':S.sc.me<S.sc.ai?'Défaite.':'Match nul.';log(msg+' — FIN DU MATCH : '+r+(MODE==='carriere'?finMatch(S.sc.me>S.sc.ai?'victoire':S.sc.me<S.sc.ai?'defaite':'nul'):''));const b=document.createElement('button');b.textContent=MODE==='carriere'?'Retour à la carrière':'Rejouer';b.onclick=MODE==='carriere'?()=>go('car'):init;$('acts').innerHTML='';$('acts').appendChild(b);}
-const tireur=t=>S.roles[t].buteur;
-const pTir=(k,dist)=>cl(TIR_BASE+TIR_K*k.st.tb+(has(k,'tb')?SPEC_BONUS:0)-(dist==null?0:DIST_K*Math.max(0,dist-DIST_FREE)),5,95);
-function melee(at){const f=t=>1.2*(t[0].st.me+t[1].st.me+t[2].st.me)+t.slice(3,8).reduce((s,p)=>s+p.st.me,0),A=f(S.eq[at]),B=f(S.eq[other(at)]);return cl(50+MEL_SENS*100*(A-B)/(A+B),10,90)}
-function ecran(titre,zone,hint,btns){
-  const me=S.ball==='me',c=C(),d=D();
-  $('c1').innerHTML=card(c,S.ball);$('c2').innerHTML=card(d,other(S.ball));
-  $('t-half').textContent=(S.n<PAR_MI_TEMPS?'1re':'2e')+' mi-temps · '+titre;$('t-zone').textContent=zone;
-  $('t-state').textContent=me?'Tireur : '+c.nom:'Tireur adverse : '+c.nom;$('t-state').className='tag';$('hint').textContent=hint;
-  const a=$('acts');a.innerHTML='';
-  btns.forEach(([lab,pct,fn,off])=>{const b=document.createElement('button');b.innerHTML=`<span>${lab}</span><b>${OPT.pct&&pct!=null?pct+' %':''}</b>`;b.disabled=!!off;b.onclick=fn;a.appendChild(b)})}
-function turnConv(){const me=S.ball==='me',c=C();
-  ecran('transformation',me?'Tu tentes la transformation':'L\'adversaire tente la transformation',me?'Seule la stat Tir au but du tireur compte.':'Regarde la transformation adverse.',
-   [[me?'Tenter la transformation':'Voir la transformation adverse',pTir(c),convRes]])}
-function convRes(){
-  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
-  const k=C(),ok=R(1,100)<=pTir(k);S.conv=false;if(ok)S.sc[S.ball]+=2;
-  const msg=`${k.nom} : transformation ${ok?'réussie (+2) !':'manquée.'}`;
-  S.ball=other(S.ball);S.pos=50;S.hole=false;S.press=false;S.ax=.5;S.reset=true;S.kick=true;choose();suite(msg)}
-function turnPen(){const me=S.ball==='me',c=C(),dist=100-S.pos;
-  ecran('pénalité',(me?'Pénalité pour toi':'Pénalité contre toi')+' · '+dist+' m des poteaux',me?'Choisis : touche, tir au but, mêlée ou jeu à la main.':'L\'adversaire va décider.',
-   me?[['Aller en touche',null,()=>penRes('touche')],['Tirer au but'+(dist>DIST_MAX?' (trop loin)':''),pTir(c,dist),()=>penRes('tir'),dist>DIST_MAX],['Mêlée',Math.round(melee('me')),()=>penRes('melee')],['Jouer à la main',null,()=>penRes('main')]]:[['Voir la décision adverse',null,()=>penRes('auto')]])}
-function penRes(ch){
-  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
-  const at=S.ball,df=other(at),k=C(),dist=100-S.pos,prev={s:at,i:S.ci};let t=ch;
-  if(at==='ai')t=dist<=40?'tir':dist<=DIST_MAX?(Math.random()<.5?'tir':'touche'):(Math.random()<.7?'touche':'melee');
-  S.pen=false;S.hole=false;S.press=false;let msg='Pénalité : ';
-  if(t==='tir'){const ok=R(1,100)<=pTir(k,dist);msg+=`${k.nom} tente les poteaux (${dist} m) : `;
-    if(ok){S.sc[at]+=3;msg+='réussi (+3) !';S.ball=df;S.pos=50;S.ax=.5;S.reset=true;S.kick=true}else{msg+='manqué, renvoi aux 22 m.';S.ball=df;S.pos=22;S.ax=R(30,70)/100}}
-  else if(t==='touche'){const g=R(20,35)+k.st.pi-5;S.pos=Math.min(S.pos+g,97);S.ax=Math.random()<.5?.08:.92;const ra=S.roles[at],rd=S.roles[df],E=S.eq[at],F=S.eq[df],A=E[ra.lanceur].st.la+Math.max(E[ra.saut1].st.de,E[ra.saut2].st.de),B=Math.max(...[rd.saut1,rd.saut2].map(i=>F[i].st.de+F[i].st.an)),w=R(1,100)<=cl(50+4*(A-B),20,90);
-    msg+=`touche trouvée (+${g} m), lancer de ${E[ra.lanceur].nom} ${w?'gagné.':'perdu, ballon à l\'adversaire.'}`;if(!w){S.ball=df;S.pos=100-S.pos}}
-  else if(t==='melee'){const w=R(1,100)<=melee(at);msg+=w?'mêlée gagnée, la défense est désorganisée !':'mêlée perdue, ballon à l\'adversaire.';if(w)S.hole=true;else{S.ball=df;S.pos=100-S.pos}}
-  else msg+='jeu à la main, la défense recule.';
-  moveBall(prev,'Pied',S.ax,S.ball==='me'?1-S.pos/100:S.pos/100);choose();if(t==='main')S.ci=8;suite(msg)}
-/* ====== TOUR DE JEU ====== */
-function play(choice){
-  if(S.busy||S.end)return;S.busy=true;document.querySelectorAll('#acts button').forEach(b=>b.disabled=true);
-  const me=S.ball==='me',c=C(),d=D();
-  const a=me?choice:aiAtt(),po=me?aiDef():choice,X=ATT[a];
-  const prev={s:S.ball,i:S.ci},pd=S.ball==='me'?-1:1,cx=slot(prev).x;
-  const ok=R(1,100)<=pAtt(c,d,a,po);
-  let msg=`${c.nom} : ${LIB[a]} — la défense choisit « ${STATS[po]} ». `,flip=false,pass=false;
-  let nx=cx;if(X.kick)nx=R(15,85)/100;else if(ok)nx=cx+(a==='Percussion'?R(-4,4):(Math.random()<.5?-1:1)*R(10,20))/100;S.ax=cl(nx,.06,.94);
-  S.press=false;
-  if(X.kick){const gain=ok?R(...X.g):R(5,10);S.pos=Math.min(S.pos+gain,97);msg+=ok?`Réussi : ${gain} m gagnés au pied.`:`Coup de pied court (${gain} m).`;flip=true;if(ok&&X.press){S.press=true;msg+=' Pression sur le receveur !'}}
-  else if(ok){const gain=R(...X.g);S.pos+=gain;msg+=`Réussi : +${gain} m.`;S.hole=(po==='co'||po==='an');if(S.hole)msg+=' La défense est désorganisée !';if(a==='Conservation')S.hole=false;pass=a==='Passe';if(po==='co'&&R(1,100)<=PEN_CHANCE){S.pen=true;msg+=' Faute de la défense dans le regroupement : pénalité !'}}
-  else{S.hole=false;
-    if(a==='Passe'){flip=true;msg+=(po==='an'&&R(1,100)<=INT_BASE+INT_K*d.st.an+(has(d,'an')?15:0))?'Interception !':'En-avant, ballon perdu.'}
-    else{const g=R(0,2);S.pos+=g;msg+=`Plaqué (+${g} m).`;
-      if(po==='co'&&R(1,100)<=REC_BASE+REC_K*d.st.co+(has(d,'co')?15:0)){flip=true;msg+=' Ballon récupéré au sol, turnover !'}}}
-  const tryNow=!flip&&S.pos>=100,ey=tryNow?(pd<0?.02:.98):(S.ball==='me'?1-S.pos/100:S.pos/100);moveBall(prev,a,S.ax,ey);
-  if(tryNow){S.reset=true;S.sc[S.ball]+=5;S.pen=false;msg=`${c.nom} : ESSAI ! (+5) Place à la transformation.`;S.pos=98;S.hole=false;pass=false;S.conv=true;choose()}
-  else if(flip){S.ball=other(S.ball);S.pos=100-S.pos;S.hole=false;choose()}
-  else choose(pass);
-  S.n++;suite(msg);
-}
-function aiAtt(){const w={Percussion:30,Duel:15,Passe:25,Conservation:10,PiedTactique:10,PiedPression:10};if(S.pos<25){w.PiedTactique+=30;w.PiedPression+=15}if(S.pos>75){w.Percussion+=25;w.PiedTactique=0;w.PiedPression=0}return pick(w)}
-function aiDef(){return pick({pl:40,mo:25,an:20,co:15})}
-/* ====== TERRAIN (points sur un carré vert) ====== */
-const cv=$('cv'),g=cv.getContext('2d');let dots=[],ball={x:.5,y:.5,tx:.5,ty:.5},ring={c:null,d:null};
-function draw(){dots=[];for(const s of['me','ai'])for(let i=0;i<15;i++)dots.push({s,i,x:.5,y:.5,tx:.5,ty:.5,lx:.5,ly:.5,pl:true})}
-/* place « naturelle » de chaque joueur autour du point de jeu (ax = côté du terrain, S.pos = avancée) */
-function slot(p){
-  const att=p.s===S.ball,dA=S.ball==='me'?-1:1,bY=S.ball==='me'?1-S.pos/100:S.pos/100,ax=S.ax,side=ax<.5?1:-1,i=p.i;let x,o;
-  if(i<8){x=ax+((i%4)-1.5)*(att?.07:.08);o=att?-(.02+(i>>2)*.03):.035+(i>>2)*.03}
-  else if(att){const T=[[.04,.025],[.14,.07],[0,.11],[.26,.10],[.38,.13],[0,.11],[0,.25]][i-8];
-    x=i===10?.07:i===13?.93:i===14?.5:ax+T[0]*side;o=-T[1]}
-  else{x=.1+(i-8)/6*.8;o=.07+(i===14?.14:0)}
-  return{x:cl(x,.04,.96),y:cl(bY+dA*o,.02,.98)}}
-/* début de tour : l'équipe se replace, et le ballon va vers le porteur */
-function retarget(){
-  const dA=S.ball==='me'?-1:1,cs=slot({s:S.ball,i:S.ci});
-  dots.forEach(p=>{const t=slot(p);if(p.s!==S.ball&&p.i===S.di){t.x=cs.x;t.y=cs.y+dA*.04}
-    let dx=t.x-p.lx,dy=t.y-p.ly;const d=Math.hypot(dx,dy);
-    if(!S.reset&&d>DEPLACEMENT_MAX){dx*=DEPLACEMENT_MAX/d;dy*=DEPLACEMENT_MAX/d}
-    p.lx+=dx;p.ly+=dy;p.tx=p.lx;p.ty=p.ly;p.pl=S.reset||d-DEPLACEMENT_MAX<SEUIL_PLACE});
-  S.late=dots.filter(p=>p.s!==S.ball&&p.pl).length<MIN_EN_PLACE;S.reset=false;
-  const cd=dots.find(p=>p.s===S.ball&&p.i===S.ci);ball.tx=cd.lx;ball.ty=cd.ly;
-  ring={c:{s:S.ball,i:S.ci},d:{s:other(S.ball),i:S.di}}}
-/* fin d'action : le ballon (et le porteur s'il court) se déplacent vers le nouvel endroit */
-function moveBall(prev,a,x,y){
-  const d=dots.find(p=>p.s===prev.s&&p.i===prev.i);
-  if(d&&(a==='Percussion'||a==='Duel')){d.tx=d.lx=x;d.ty=d.ly=y}
-  ball.tx=x;ball.ty=y}
-function frame(){
-  if(!S){requestAnimationFrame(frame);return}
-  const W=cv.width,H=cv.height;g.fillStyle='#3d8c4b';g.fillRect(0,0,W,H);
-  g.strokeStyle='rgba(255,255,255,.55)';g.lineWidth=2;
-  [.05,.22,.5,.78,.95].forEach(y=>{g.beginPath();g.moveTo(0,y*H);g.lineTo(W,y*H);g.stroke()});
-  dots.forEach(p=>{p.x+=(p.tx-p.x)*.1;p.y+=(p.ty-p.y)*.1;
-    g.beginPath();g.arc(p.x*W,p.y*H,7,0,7);g.fillStyle=p.s==='me'?COULEUR_ME:'#d9473b';g.fill();
-    const car=ring.c&&p.s===ring.c.s&&p.i===ring.c.i,def=ring.d&&p.s===ring.d.s&&p.i===ring.d.i;
-    if(car||def){g.lineWidth=3;g.strokeStyle=car?'#fff':'#ffd166';g.beginPath();g.arc(p.x*W,p.y*H,11,0,7);g.stroke()}});
-  ball.x+=(ball.tx-ball.x)*.12;ball.y+=(ball.ty-ball.y)*.12;
-  g.beginPath();g.ellipse(ball.x*W,ball.y*H,6,4,.5,0,7);g.fillStyle='#fff3c4';g.fill();g.lineWidth=1.5;g.strokeStyle='#5a3b1a';g.stroke();
-  requestAnimationFrame(frame)}
-/* ====== NAVIGATION : accueil, menu, équipe, options ====== */
-const go=n=>{document.querySelectorAll('.screen').forEach(e=>e.classList.toggle('on',e.id==='s-'+n));if(n==='team')roster();if(n==='car')hub();if(n==='xv')xvPage();window.scrollTo(0,0)};
-function roster(){$('roster').innerHTML='<table><thead><tr><th>N°</th><th>Nom</th><th>Poste</th>'+Object.values(STATS).map(x=>`<th>${x}</th>`).join('')+'<th>Spécialité</th></tr></thead><tbody>'+
- (CAR?collection():MON_EQUIPE).map(p=>`<tr><td>${p.num}</td><td>${p.nom}</td><td>${p.poste}</td>${Object.keys(STATS).map(k=>`<td>${p.st[k]}</td>`).join('')}<td>${p.sp}</td></tr>`).join('')+'</tbody></table>'}
-document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
-$('b-match').onclick=()=>{MODE='direct';ROLES=null;COULEUR_ME='#2f6fe4';go('match');init()};
-$('b-quit').onclick=()=>{if(S&&!S.end&&!confirm('Quitter le match en cours ?'))return;if(S)S.end=true;go(MODE==='carriere'?'car':'menu')};
-$('o-dur').onchange=e=>{PAR_MI_TEMPS=+e.target.value};
-$('o-pct').onchange=e=>{OPT.pct=e.target.checked};
-frame();
+/* ====== CARRIÈRE : club, boosters, collection ====== */
+let MODE='direct',XV=null,COULEUR_ME='#2f6fe4',CAR=null,ROLES=null;
+const CLE='rugby_carriere',tot=c=>Object.values(c.st).reduce((x,y)=>x+y,0);
+const sauve=()=>{try{localStorage.setItem(CLE,JSON.stringify(CAR))}catch(e){}};
+const charge=()=>{try{return JSON.parse(localStorage.getItem(CLE))}catch(e){return null}};
+const collection=()=>CAR.cartes.map(id=>POOL.find(c=>c.id===id)).filter(Boolean).sort((a,b)=>a.num-b.num||tot(b)-tot(a));
+const composerXV=()=>POSTES.map(([n])=>collection().filter(c=>c.num===n).sort((a,b)=>tot(b)-tot(a))[0]).filter(Boolean);
+function tirer(n){const o=[];for(let i=0;i<n;i++){let t=Math.random()*100,r='commun';for(const q in RARETES)if((t-=RARETES[q].w)<0){r=q;break}const l=POOL.filter(c=>c.rar===r);o.push(l[R(0,l.length-1)])}return o}
+function lotDepart(k){const per=15/BOOSTER.depart;return POSTES.slice(k*per,k*per+per).map(([n])=>{let l=POOL.filter(c=>c.num===n&&c.rar==='commun');if(!l.length)l=POOL.filter(c=>c.num===n);return l[R(0,l.length-1)]})}
+const carteDe=id=>POOL.find(x=>x.id===id);
+function idsXV(){const col=collection();if(!(CAR.xv&&CAR.xv.length===15&&CAR.xv.every(id=>col.some(x=>x.id===id)))){CAR.xv=composerXV().map(x=>x.id);sauve()}return CAR.xv}
+function buildXV(){return idsXV().map((id,i)=>{const k=carteDe(id);return k.num===i+1?k:{...k,num:i+1,hors:true}})}
+let sel=-1;
+/* ====== RÔLES : lanceur, sauteurs, buteur (index de poste 0 à 14) ====== */
+const ROLES_DEF=[['lanceur','Lanceur en touche','la'],['saut1','Sauteur de tête d\'alignement','de'],['saut2','Sauteur de fond d\'alignement','de'],['buteur','Buteur','tb']];
+function rolesAuto(xv){const best=(k,ex=[])=>xv.map((p,i)=>i).filter(i=>!ex.includes(i)).sort((a,b)=>xv[b].st[k]-xv[a].st[k])[0];
+  const l=best('la'),s1=best('de',[l]),s2=best('de',[l,s1]);return{lanceur:l,saut1:s1,saut2:s2,buteur:best('tb')}}
+function getRoles(){const r=CAR.roles;if(!(r&&ROLES_DEF.every(([k])=>Number.isInteger(r[k])&&r[k]>=0&&r[k]<15))){CAR.roles=rolesAuto(buildXV());sauve()}return CAR.roles}
+function setRole(k,v){const r=getRoles(),old=r[k],lin=['lanceur','saut1','saut2'];if(lin.includes(k))for(const o of lin)if(o!==k&&r[o]===v)r[o]=old;r[k]=v;CAR.roles=r;sauve();xvPage()}
+function rolesUI(){const xv=buildXV(),r=getRoles();
+  $('x-roles').innerHTML=ROLES_DEF.map(([k,l,s])=>`<label>${l}<select data-r="${k}">${xv.map((p,i)=>`<option value="${i}"${r[k]===i?' selected':''}>n°${i+1} ${p.nom} — ${STATS[s]} ${p.st[s]}</option>`).join('')}</select></label>`).join('');
+  document.querySelectorAll('#x-roles select').forEach(s=>s.onchange=()=>setRole(s.dataset.r,+s.value))}
+function xvPage(){const ids=idsXV();rolesUI();$('x-note').textContent='Aucun malus automatique : un joueur hors poste garde ses stats, c\'est à toi de juger s\'il convient.';
+  $('x-grid').innerHTML=ids.map((id,i)=>{const k=carteDe(id);return `<button class="slot${i===sel?' sel':''}" data-i="${i}" style="--c:${RARETES[k.rar].c}"><b>n°${i+1} ${POSTES[i][1]}</b><br>${k.nom}<br><small>${RARETES[k.rar].n} · total ${tot(k)}${k.num!==i+1?' · <span class="hp">hors poste</span>':''}</small></button>`}).join('');
+  document.querySelectorAll('.slot').forEach(b=>b.onclick=()=>{sel=+b.dataset.i;xvPage()});
+  if(sel<0){$('x-pick').innerHTML='<p class="note">Clique sur un poste pour changer son titulaire.</p>';return}
+  const n=sel+1,l=[...new Set(CAR.cartes)].map(carteDe).filter(Boolean).sort((a,b)=>(b.num===n)-(a.num===n)||tot(b)-tot(a));
+  $('x-pick').innerHTML=`<h3>n°${n} ${POSTES[sel][1]} : choisis un joueur</h3>`+l.map(k=>{const q=ids.indexOf(k.id);return `<button class="opt" data-id="${k.id}" style="--c:${RARETES[k.rar].c}"><span>${k.nom} <small>n°${k.num} ${k.poste}${k.num!==n?' · hors poste':''}${q>=0&&q!==sel?' · titulaire n°'+(q+1):''}${q===sel?' · en place':''}</small></span><b>${RARETES[k.rar].n} · A ${k.st.pu}/${k.st.vi}/${k.st.te}/${k.st.pi} · D ${k.st.pl}/${k.st.mo}/${k.st.an}/${k.st.co}</b></button>`}).join('');
+  document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>choisir(b.dataset.id))}
+function choisir(id){const ids=idsXV(),q=ids.indexOf(id),old=ids[sel];
+  if(q!==sel){const used=ids.filter(x=>x===id).length,own=CAR.cartes.filter(x=>x===id).length;if(q>=0&&used>=own)ids[q]=old;ids[sel]=id}
+  CAR.xv=ids;sauve();sel=-1;xvPage()}
+const GR=['pu','vi','te','pi','pl','mo','an','co','me','la','de','tb'];
+const fiche=c=>`${avatar(c,'photo')}<b>${escH(c.nom)}</b><span class="sub">n°${c.num} ${c.poste} · <span style="color:${RARETES[c.rar].c};font-weight:700">${RARETES[c.rar].n}</span></span><div class="sts">${GR.map(k=>`<span><i>${k}</i>${c.st[k]}</span>`).join('')}</div><div>★ ${c.sp}</div><div class="bio">${[c.age&&c.age+' ans',c.poids&&c.poids+' kg',c.taille&&c.taille+' cm',c.nat].filter(Boolean).map(escH).join(' · ')}</div>`;
+const faceCarte=c=>`<div class="carte" style="--c:${RARETES[c.rar].c}"><i><div class="dos"></div><div class="face fiche">${fiche(c)}</div></i></div>`;
+function ouvrir(cartes,titre){
+  go('boost');$('b-titre').textContent=titre;$('b-cards').innerHTML=cartes.map(faceCarte).join('');
+  CAR.cartes.push(...cartes.map(c=>c.id));sauve();const b=$('b-btn'),els=[...document.querySelectorAll('#b-cards .carte')];
+  b.textContent='Révéler les cartes';b.disabled=false;
+  b.onclick=()=>{b.disabled=true;els.forEach((e,i)=>setTimeout(()=>e.classList.add('on'),i*500));setTimeout(()=>{b.textContent='Continuer';b.disabled=false;b.onclick=()=>go('car')},els.length*500+400)}}
+function hub(){
+  $('c-titre').innerHTML=`<span class="pastille" style="background:${CAR.club.couleur}"></span>${CAR.club.nom}`;
+  const dep=CAR.depart>0;$('c-info').textContent=dep?`Ouvre tes ${CAR.depart} boosters de départ pour recevoir tes 15 premiers joueurs.`:`${CAR.cartes.length} cartes · ${CAR.boosters} booster${CAR.boosters>1?'s':''} disponible${CAR.boosters>1?'s':''}`;
+  const o=$('c-open');o.textContent=dep?`Ouvrir un booster de départ (${CAR.depart})`:`Ouvrir un booster (${CAR.boosters})`;o.disabled=!dep&&CAR.boosters<1;
+  $('c-play').disabled=dep;
+  const xv=dep?[]:idsXV();$('c-xv').disabled=dep;
+  $('c-col').innerHTML=dep?'':'<div class="cards" style="justify-content:flex-start">'+collection().map(c=>{const q=xv.indexOf(c.id);return `<div class="carteF fiche" style="--c:${RARETES[c.rar].c}">${q>=0?`<span class="badge">XV n°${q+1}</span>`:''}${fiche(c)}</div>`}).join('')+'</div>'}
+function finMatch(res){const n=RECOMPENSES[res];CAR.boosters+=n;sauve();return ` · +${n} booster${n>1?'s':''} gagné${n>1?'s':''} !`}
+/* ---- branchements ---- */
+let coul=COULEURS[0];
+$('sw').innerHTML=COULEURS.map((c,i)=>`<button class="sw${i?'':' on'}" data-c="${c}" style="background:${c}" aria-label="Couleur ${i+1}"></button>`).join('');
+document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{coul=b.dataset.c;document.querySelectorAll('.sw').forEach(x=>x.classList.toggle('on',x===b))});
+$('b-car').onclick=()=>{CAR=charge();if(CAR){COULEUR_ME=CAR.club.couleur;go('car')}else go('club')};
+$('k-ok').onclick=()=>{CAR={club:{nom:($('k-nom').value.trim()||'Mon club').slice(0,20),couleur:coul},cartes:[],depart:BOOSTER.depart,boosters:0};COULEUR_ME=coul;sauve();go('car')};
+$('c-open').onclick=()=>{if(CAR.depart>0){const k=BOOSTER.depart-CAR.depart;CAR.depart--;ouvrir(lotDepart(k),'Booster de départ '+(k+1)+'/'+BOOSTER.depart)}else if(CAR.boosters>0){CAR.boosters--;ouvrir(tirer(BOOSTER.cartes),'Nouveau booster')}};
+$('c-play').onclick=()=>{MODE='carriere';COULEUR_ME=CAR.club.couleur;XV=buildXV();ROLES=getRoles();go('match');init()};
+$('c-reset').onclick=()=>{if(confirm('Effacer cette carrière et recommencer ?')){try{localStorage.removeItem(CLE)}catch(e){}CAR=null;go('club')}};
+$('c-xv').onclick=()=>{sel=-1;go('xv')};
+$('x-auto').onclick=()=>{CAR.xv=composerXV().map(x=>x.id);CAR.roles=null;sauve();sel=-1;xvPage()};
