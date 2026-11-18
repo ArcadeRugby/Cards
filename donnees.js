@@ -37,3 +37,4 @@ const POOL=(()=>{let a=20260101;const r=()=>{a=(a+0x6D2B79F5)|0;let t=Math.imul(
  POSTES.forEach(([num,poste,st,sp])=>{for(let k=0;k<20;k++){let t=r()*100,rar='commun';for(const q in RARETES)if((t-=RARETES[q].w)<0){rar=q;break}
   const s={};for(const x in st)s[x]=Math.max(1,Math.min(10,st[x]+ri(-1,1)+RARETES[rar].b));
   out.push({id:'j'+(++id),nom:pk(PRE)+' '+pk(NOM),num,poste,st:s,sp:r()<RARETES[rar].sp?pk(TOUS):sp,rar})}});return out})(); // 300 joueurs, toujours les mêmes
+let TIR_BASE=25,TIR_K=7,DIST_FREE=20,DIST_K=1.2,DIST_MAX=55,PEN_CHANCE=30,MEL_SENS=2; // tir au but, pénalités, mêlée
