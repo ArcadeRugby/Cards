@@ -41,13 +41,15 @@ function tableBilan(pool){const RK=Object.keys(RARETES);
 function ph(p){const ini=String(p.nom||'?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase(),col=(RARETES[p.rar]||{c:'#9aa5a1'}).c;
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#2a4a44"/><circle cx="100" cy="78" r="36" fill="${col}" opacity=".55"/><ellipse cx="100" cy="190" rx="68" ry="58" fill="${col}" opacity=".55"/><text x="100" y="118" font-family="Georgia,serif" font-size="46" font-weight="700" fill="#fff" text-anchor="middle">${ini.replace(/[<&]/g,'')}</text></svg>`;
   return 'data:image/svg+xml,'+encodeURIComponent(svg).replace(/'/g,'%27')}
-const photoDef=p=>(typeof SUPABASE!=='undefined'&&SUPABASE.url)?SUPABASE.url.replace(/\/$/,'')+'/storage/v1/object/public/photos/'+encodeURIComponent(p.id)+'.jpg':ph(p);
+/* adresse de base du projet Supabase : tolère un « / » final ou un « /rest/v1 » collé par erreur */
+const baseSupabase=()=>{const S=typeof SUPABASE!=='undefined'?SUPABASE:null;return S&&S.url?String(S.url).trim().replace(/\/+$/,'').replace(/\/rest\/v1$/,'').replace(/\/+$/,''):''};
+const photoDef=p=>baseSupabase()?baseSupabase()+'/storage/v1/object/public/photos/'+encodeURIComponent(p.id)+'.jpg':ph(p);
 const avatar=(p,cls)=>`<img class="${cls}" src="${escH(p.photo||photoDef(p))}" alt="${escH(p.nom)}" title="${escH(p.nom)}" onerror="this.onerror=null;this.src='${ph(p)}'">`;
 /* chargement au démarrage : Supabase si configuré, sinon joueurs.csv, sinon base générée automatiquement */
 let SOURCE_BASE='génération automatique',ERREURS_BASE=[];
-async function depuisSupabase(){const S=typeof SUPABASE!=='undefined'?SUPABASE:null;if(!S||!S.url||!S.key)return null;
-  const h={apikey:S.key};if(!S.key.startsWith('sb_'))h.Authorization='Bearer '+S.key;let tout=[];
-  for(let off=0;;off+=1000){const r=await fetch(`${S.url.replace(/\/$/,'')}/rest/v1/joueurs?select=*&order=id&limit=1000&offset=${off}`,{headers:h});
+async function depuisSupabase(){const U=baseSupabase(),K=(typeof SUPABASE!=='undefined'&&SUPABASE.key?String(SUPABASE.key).trim():'');if(!U||!K)return null;
+  const h={apikey:K};if(!K.startsWith('sb_'))h.Authorization='Bearer '+K;let tout=[];
+  for(let off=0;;off+=1000){const r=await fetch(`${U}/rest/v1/joueurs?select=*&order=id&limit=1000&offset=${off}`,{headers:h});
     if(!r.ok)throw new Error('Supabase HTTP '+r.status);const p=await r.json();tout=tout.concat(p);if(p.length<1000)break}
   return validerLignes(tout,1)}
 async function depuisCSV(){const r=await fetch('joueurs.csv',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return lireJoueurs(decoder(await r.arrayBuffer()))}
