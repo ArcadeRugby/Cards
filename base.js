@@ -47,7 +47,10 @@ const photoDef=p=>baseSupabase()?baseSupabase()+'/storage/v1/object/public/photo
 const avatar=(p,cls)=>`<img class="${cls}" src="${escH(p.photo||photoDef(p))}" alt="${escH(p.nom)}" title="${escH(p.nom)}" onerror="this.onerror=null;this.src='${ph(p)}'">`;
 /* chargement au démarrage : Supabase si configuré, sinon joueurs.csv, sinon base générée automatiquement */
 let SOURCE_BASE='génération automatique',ERREURS_BASE=[],ERREUR_SUPABASE='';
+/* une clé secrète (sb_secret_… ou JWT service_role) ne doit jamais être utilisée dans le navigateur */
+const cleSecrete=K=>{if(/^sb_secret_/.test(K))return true;try{return JSON.parse(atob(K.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role==='service_role'}catch(e){return false}};
 async function depuisSupabase(){const U=baseSupabase(),K=(typeof SUPABASE!=='undefined'&&SUPABASE.key?String(SUPABASE.key).trim():'');if(!U||!K)return null;
+  if(cleSecrete(K))throw new Error('La clé collée dans supabase-config.js est une clé SECRÈTE. Elle ne doit jamais figurer dans le jeu : remplace-la par la clé publique (« publishable » ou « anon ») et révoque la clé secrète dans Supabase.');
   const h={apikey:K};if(!K.startsWith('sb_'))h.Authorization='Bearer '+K;let tout=[];
   for(let off=0;;off+=1000){const r=await fetch(`${U}/rest/v1/joueurs?select=*&order=id&limit=1000&offset=${off}`,{headers:h});
     if(!r.ok){let d='';try{d=(await r.text()).slice(0,300)}catch(e){}throw new Error('HTTP '+r.status+(d?' — '+d:''))}const p=await r.json();tout=tout.concat(p);if(p.length<1000)break}
