@@ -46,17 +46,17 @@ const baseSupabase=()=>{const S=typeof SUPABASE!=='undefined'?SUPABASE:null;retu
 const photoDef=p=>baseSupabase()?baseSupabase()+'/storage/v1/object/public/photos/'+encodeURIComponent(p.id)+'.jpg':ph(p);
 const avatar=(p,cls)=>`<img class="${cls}" src="${escH(p.photo||photoDef(p))}" alt="${escH(p.nom)}" title="${escH(p.nom)}" onerror="this.onerror=null;this.src='${ph(p)}'">`;
 /* chargement au démarrage : Supabase si configuré, sinon joueurs.csv, sinon base générée automatiquement */
-let SOURCE_BASE='génération automatique',ERREURS_BASE=[];
+let SOURCE_BASE='génération automatique',ERREURS_BASE=[],ERREUR_SUPABASE='';
 async function depuisSupabase(){const U=baseSupabase(),K=(typeof SUPABASE!=='undefined'&&SUPABASE.key?String(SUPABASE.key).trim():'');if(!U||!K)return null;
   const h={apikey:K};if(!K.startsWith('sb_'))h.Authorization='Bearer '+K;let tout=[];
   for(let off=0;;off+=1000){const r=await fetch(`${U}/rest/v1/joueurs?select=*&order=id&limit=1000&offset=${off}`,{headers:h});
-    if(!r.ok)throw new Error('Supabase HTTP '+r.status);const p=await r.json();tout=tout.concat(p);if(p.length<1000)break}
+    if(!r.ok){let d='';try{d=(await r.text()).slice(0,300)}catch(e){}throw new Error('HTTP '+r.status+(d?' — '+d:''))}const p=await r.json();tout=tout.concat(p);if(p.length<1000)break}
   return validerLignes(tout,1)}
 async function depuisCSV(){const r=await fetch('joueurs.csv',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return lireJoueurs(decoder(await r.arrayBuffer()))}
 const complet=res=>res&&POSTES.every(p=>res.joueurs.some(j=>j.num===p[0]));
 const PRET=(async()=>{let res=null,src='';
-  try{res=await depuisSupabase();src='Supabase'}catch(e){console.warn('Supabase indisponible :',e.message||e);res=null}
-  if(!complet(res)){if(res)console.warn('Supabase : il faut au moins un joueur valide par poste.');res=null;
+  try{res=await depuisSupabase();src='Supabase';if(!res)ERREUR_SUPABASE='Le fichier supabase-config.js est vide ou introuvable : adresse ou clé manquante.'}catch(e){ERREUR_SUPABASE=String(e.message||e);console.warn('Supabase indisponible :',ERREUR_SUPABASE);res=null}
+  if(!complet(res)){if(res){ERREUR_SUPABASE='La table « joueurs » a été lue mais ne contient pas au moins un joueur valide par poste ('+res.joueurs.length+' valide(s), '+res.erreurs.length+' problème(s)).'+(res.joueurs.length+res.erreurs.length===0?' Elle est vide, ou la règle de lecture publique manque.':' Premier problème : '+(res.erreurs[0]||''));console.warn('Supabase :',ERREUR_SUPABASE)}res=null;
     try{res=await depuisCSV();src='joueurs.csv'}catch(e){console.info('joueurs.csv non chargé ('+(e.message||e)+')');res=null}}
   if(res){ERREURS_BASE=res.erreurs;if(res.erreurs.length)console.warn(src+' : '+res.erreurs.length+' problème(s)',res.erreurs.slice(0,10));
     if(complet(res)){POOL.splice(0,POOL.length,...res.joueurs);SOURCE_BASE=src}else console.warn(src+' ignoré : il faut au moins un joueur valide par poste.')}})();
