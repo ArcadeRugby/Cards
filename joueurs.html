@@ -1,4 +1,5 @@
 <!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rugby – Joueurs (import et filtres)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap">
 <style>
 body{margin:0;background:#16262a;color:#e9efe9;font:14px/1.4 system-ui,sans-serif}
 header{position:sticky;top:0;z-index:5;background:#0f1c1f;padding:10px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;border-bottom:1px solid #2e4745}
@@ -10,6 +11,9 @@ button{font:inherit;cursor:pointer;background:#e8e1cf;color:#1b2326;border:0;bor
 table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;text-align:left;border-bottom:1px solid #2e4745;white-space:nowrap}th{font-size:12px;opacity:.8;cursor:pointer;user-select:none}th.on{color:#ffd166;opacity:1}
 .note{opacity:.75;font-size:12.5px;margin:6px 0 0}.warn{background:#4a3b12;border-radius:6px;padding:8px 10px;font-size:13px;margin:8px 0}.ok{background:#1f4a3a;border-radius:6px;padding:8px 10px;font-size:13px;margin:8px 0}
 .wrap{overflow-x:auto}.pager{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:8px}.tag{background:#27403f;border-radius:10px;padding:1px 8px;font-size:12px}.cl{color:#ffb86b}
+.lien{color:#9fd0c6;text-decoration:none;font-weight:600}.lien:hover{text-decoration:underline}
+.fond{position:fixed;inset:0;background:rgba(0,0,0,.78);display:none;align-items:center;justify-content:center;z-index:20;flex-direction:column;gap:10px;padding:10px;box-sizing:border-box}.fond.on{display:flex}
+.fond canvas{width:min(380px,88vw);max-height:76vh;aspect-ratio:600/736;border-radius:6px}.fond .btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 </style></head><body>
 <header><h1>Rugby – Joueurs</h1><div><a href="admin.html">← Admin</a></div></header>
 <main>
@@ -30,6 +34,8 @@ table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;text-align:left;
 <div><button id="ex-sup">Télécharger pour Supabase (la sélection)</button></div><div><button class="sec" id="ex-xl">Télécharger la liste simple (Excel)</button></div></div>
 <p class="note">« La sélection » correspond aux joueurs affichés par les filtres ci-dessus (sans filtre : toute la base). Les joueurs « À classer » n'ont pas de statistiques : ils seront importés sans notes, et le jeu les ignorera tant qu'ils ne sont pas classés.</p></section>
 </main>
+<div class="fond" id="fond"><canvas id="carte"></canvas><div class="btns"><button class="sec" id="c-prec" aria-label="Joueur précédent">←</button><button id="c-dl">Télécharger l'image (PNG)</button><button class="sec" id="c-suiv" aria-label="Joueur suivant">→</button><button class="sec" id="c-x">Fermer</button></div><p class="note" id="c-info" style="text-align:center"></p></div>
+<script src="supabase-config.js"></script><script src="carte.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const POSTES=['Pilier','Talonneur','Deuxième ligne','Troisième ligne aile','Troisième ligne centre','Demi de mêlée',"Demi d'ouverture",'Ailier','Centre','Arrière'];
@@ -82,7 +88,7 @@ function appliquer(){PAGE=0;const nom=norm($('f-nom').value),a1=+$('f-a1').value
   const cmp={nom:(x,y)=>x.nomN.localeCompare(y.nomN,'fr'),nai:(x,y)=>x.nai.localeCompare(y.nai),'nai-':(x,y)=>y.nai.localeCompare(x.nai),nat:(x,y)=>x.nat.localeCompare(y.nat,'fr')||x.nomN.localeCompare(y.nomN,'fr'),poste:(x,y)=>POSTES.indexOf(x.poste)-POSTES.indexOf(y.poste)||x.nomN.localeCompare(y.nomN,'fr'),'note-':(x,y)=>(y.note||0)-(x.note||0)}[tri];VUE.sort(cmp);rendre()}
 function rendre(){const nbp=Math.max(1,Math.ceil(VUE.length/PAR));PAGE=Math.min(PAGE,nbp-1);
   $('compte').innerHTML=`<b>${VUE.length.toLocaleString('fr')}</b> joueur(s) correspondent sur ${BASE.length.toLocaleString('fr')}.`;
-  $('t').innerHTML='<tr><th>Nom</th><th>Naissance</th><th>Poste</th><th>Nationalité</th><th>Profil</th><th>Note</th></tr>'+VUE.slice(PAGE*PAR,PAGE*PAR+PAR).map(j=>`<tr><td>${esc(j.nom)}</td><td>${esc(j.nai)} <span class="tag">${age(j.nai)} ans</span></td><td>${esc(j.poste)}</td><td>${esc(j.nat)}</td><td${j.aC?' class="cl"':''}>${j.aC?'À classer':esc(j.profil)}</td><td>${j.note==null?'':j.note}</td></tr>`).join('');
+  $('t').innerHTML='<tr><th>Nom</th><th>Naissance</th><th>Poste</th><th>Nationalité</th><th>Profil</th><th>Note</th></tr>'+VUE.slice(PAGE*PAR,PAGE*PAR+PAR).map((j,n)=>`<tr><td><a href="#" class="lien" data-i="${PAGE*PAR+n}">${esc(j.nom)}</a></td><td>${esc(j.nai)} <span class="tag">${age(j.nai)} ans</span></td><td>${esc(j.poste)}</td><td>${esc(j.nat)}</td><td${j.aC?' class="cl"':''}>${j.aC?'À classer':esc(j.profil)}</td><td>${j.note==null?'':j.note}</td></tr>`).join('');
   $('page').textContent=`Page ${PAGE+1} / ${nbp}`;$('prec').disabled=PAGE===0;$('suiv').disabled=PAGE>=nbp-1}
 $('prec').onclick=()=>{PAGE--;rendre()};$('suiv').onclick=()=>{PAGE++;rendre()};
 ['f-poste','f-nat','f-profil','f-tri','f-a1','f-a2'].forEach(i=>$(i).onchange=appliquer);let tm;$('f-nom').oninput=()=>{clearTimeout(tm);tm=setTimeout(appliquer,150)};
@@ -92,4 +98,16 @@ function telecharger(nom,txt){const a=document.createElement('a');a.href=URL.cre
 $('ex-sup').onclick=()=>{const H=['id','nom','naissance','poste','nationalite','profil','note',...STATS.map(s=>s[1]),'specialite','poids','taille','photo','legende'],lot=+$('lot').value||VUE.length||1,nb=Math.ceil(VUE.length/lot);
   for(let p=0;p<nb;p++)setTimeout(()=>telecharger(nb>1?`joueurs-v2-partie-${p+1}-sur-${nb}.csv`:'joueurs-v2.csv',[H.join(',')].concat(VUE.slice(p*lot,p*lot+lot).map(j=>[j.id,j.nom,j.nai,j.poste,j.nat,j.profil,j.note,...STATS.map(s=>j.st[s[1]]),j.spec,j.poids,j.taille,j.photo,'false'].map(q).join(','))).join('\n')+'\n'),p*500)};
 $('ex-xl').onclick=()=>telecharger('joueurs-liste.csv','\uFEFF'+['id;nom;naissance;poste;nationalite;profil;note'].concat(VUE.map(j=>[j.id,j.nom,j.nai,j.poste,j.nat,j.aC?'':j.profil,j.note].map(v=>{v=v==null?'':String(v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(';'))).join('\r\n')+'\r\n');
+/* ====== CARTE D'UN JOUEUR (clic sur son nom) ====== */
+let CI=-1;
+const fichier=n=>String(n).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'joueur';
+async function ouvrirCarte(i){if(i<0||i>=VUE.length)return;CI=i;const j=VUE[i];$('fond').classList.add('on');$('c-info').textContent='Création de la carte…';
+  const r=await dessinerCarte($('carte'),j);if(CI!==i)return;
+  $('c-info').innerHTML=`${esc(j.nom)} · ${i+1} / ${VUE.length.toLocaleString('fr')} · photo : ${r.photo?'trouvée':'<b style="color:#ffb86b">introuvable</b> (silhouette affichée)'} · drapeau : ${r.flag?'ok':'absent'} · logo : ${r.logo?'ok':'absent'}`+(r.photo?'':`<br>Ajoute <b>photos/${esc(j.id)}.jpg</b> (ou renseigne la colonne « photo »).`)}
+function fermerCarte(){$('fond').classList.remove('on');CI=-1}
+$('t').addEventListener('click',e=>{const a=e.target.closest('a.lien');if(!a)return;e.preventDefault();ouvrirCarte(+a.dataset.i)});
+$('c-x').onclick=fermerCarte;$('c-prec').onclick=()=>ouvrirCarte(CI-1);$('c-suiv').onclick=()=>ouvrirCarte(CI+1);
+$('fond').addEventListener('click',e=>{if(e.target.id==='fond')fermerCarte()});
+document.addEventListener('keydown',e=>{if(CI<0)return;if(e.key==='Escape')fermerCarte();else if(e.key==='ArrowLeft')ouvrirCarte(CI-1);else if(e.key==='ArrowRight')ouvrirCarte(CI+1)});
+$('c-dl').onclick=()=>{try{$('carte').toBlob(b=>{if(!b){$('c-info').textContent="Export impossible : une image (photo, drapeau ou logo) n'autorise pas l'export.";return}const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='carte-'+fichier(VUE[CI].nom)+'.png';a.click()},'image/png')}catch(e){$('c-info').textContent="Export impossible : une image (photo, drapeau ou logo) n'autorise pas l'export."}};
 </script></body></html>
