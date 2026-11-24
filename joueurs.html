@@ -102,8 +102,8 @@ $('ex-xl').onclick=()=>telecharger('joueurs-liste.csv','\uFEFF'+['id;nom;naissan
 let CI=-1;
 const fichier=n=>String(n).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'joueur';
 async function ouvrirCarte(i){if(i<0||i>=VUE.length)return;CI=i;const j=VUE[i];$('fond').classList.add('on');$('c-info').textContent='Création de la carte…';
-  const r=await dessinerCarte($('carte'),j);if(CI!==i)return;
-  $('c-info').innerHTML=`${esc(j.nom)} · ${i+1} / ${VUE.length.toLocaleString('fr')} · photo : ${r.photo?'trouvée':'<b style="color:#ffb86b">introuvable</b> (silhouette affichée)'} · drapeau : ${r.flag?'ok':'absent'} · logo : ${r.logo?'ok':'absent'}`+(r.photo?'':`<br>Ajoute <b>photos/${esc(j.id)}.jpg</b> (ou renseigne la colonne « photo »).`)}
+  const r=await dessinerCarte($('carte'),j);if(CI!==i)return;$('c-dl').disabled=!r.exportable;
+  $('c-info').innerHTML=`${esc(j.nom)} · ${i+1} / ${VUE.length.toLocaleString('fr')} · photo : ${r.photo?'trouvée':'<b style="color:#ffb86b">introuvable</b> (silhouette affichée)'} · drapeau : ${r.flag?'ok':'absent'} · logo : ${r.logo?'ok':'absent'}`+(r.exportable?'':'<br><b style="color:#ffb86b">Téléchargement PNG impossible :</b> une image vient d\'un site qui ne l\'autorise pas. Héberge-la plutôt sur Supabase.')+(r.photo?'':`<br>Ajoute <b>photos/${esc(j.id)}.jpg</b> (ou renseigne la colonne « photo »).`)}
 function fermerCarte(){$('fond').classList.remove('on');CI=-1}
 $('t').addEventListener('click',e=>{const a=e.target.closest('a.lien');if(!a)return;e.preventDefault();ouvrirCarte(+a.dataset.i)});
 $('c-x').onclick=fermerCarte;$('c-prec').onclick=()=>ouvrirCarte(CI-1);$('c-suiv').onclick=()=>ouvrirCarte(CI+1);
