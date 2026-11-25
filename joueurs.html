@@ -18,13 +18,13 @@ table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;text-align:left;
 <header><h1>Rugby – Joueurs</h1><div><a href="admin.html">← Admin</a></div></header>
 <main>
 <section><h2>1. Charger la base</h2>
-<p class="note" style="margin:0 0 8px">Dans Excel, enregistre la feuille <b>JOUEURS</b> en « CSV UTF-8 », puis choisis le fichier. Rien n'est envoyé sur internet : le fichier est lu dans ton navigateur. Colonnes attendues : id, Nom, Poste, date de naissance, nationalite (obligatoires) ; Profil, les 12 statistiques, Note Globale, specialite, poids, taille, photo (facultatives).</p>
+<p class="note" style="margin:0 0 8px">Dans Excel, enregistre la feuille <b>JOUEURS</b> en « CSV UTF-8 », puis choisis le fichier. Rien n'est envoyé sur internet : le fichier est lu dans ton navigateur. Colonnes lues : id, Nom, Poste (obligatoires) ; date de naissance, nationalite, club actuel, Profil, les 12 statistiques, Note Globale, specialite, poids, taille, photo (facultatives). Les données douteuses sont signalées mais n'empêchent pas l'import.</p>
 <input type="file" id="f" accept=".csv,text/csv"><div id="rapport"></div></section>
 <section id="s-liste" hidden><h2>2. Filtrer les joueurs</h2>
 <div class="grid"><label>Nom<input id="f-nom" placeholder="Rechercher un nom"></label>
 <label>Né(e) à partir de (année)<input id="f-a1" type="number" min="1850" max="2100" placeholder="ex. 1990"></label>
 <label>Né(e) jusqu'à (année)<input id="f-a2" type="number" min="1850" max="2100" placeholder="ex. 2000"></label>
-<label>Poste<select id="f-poste"></select></label><label>Nationalité<select id="f-nat"></select></label><label>Profil<select id="f-profil"></select></label>
+<label>Poste<select id="f-poste"></select></label><label>Club<select id="f-club"></select></label><label>Nationalité<select id="f-nat"></select></label><label>Profil<select id="f-profil"></select></label>
 <label>Trier par<select id="f-tri"><option value="nom">Nom</option><option value="nai-">Naissance (plus récents d'abord)</option><option value="nai">Naissance (plus anciens d'abord)</option><option value="nat">Nationalité</option><option value="poste">Poste</option><option value="note-">Note (plus hautes d'abord)</option></select></label>
 <label>&nbsp;<button class="sec" id="f-raz">Effacer les filtres</button></label></div>
 <p id="compte" style="margin:10px 0 6px"></p>
@@ -35,7 +35,7 @@ table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;text-align:left;
 <p class="note">« La sélection » correspond aux joueurs affichés par les filtres ci-dessus (sans filtre : toute la base). Les joueurs « À classer » n'ont pas de statistiques : ils seront importés sans notes, et le jeu les ignorera tant qu'ils ne sont pas classés.</p></section>
 </main>
 <div class="fond" id="fond"><canvas id="carte"></canvas><div class="btns"><button class="sec" id="c-prec" aria-label="Joueur précédent">←</button><button id="c-dl">Télécharger l'image (PNG)</button><button class="sec" id="c-suiv" aria-label="Joueur suivant">→</button><button class="sec" id="c-x">Fermer</button></div><p class="note" id="c-info" style="text-align:center"></p></div>
-<script src="supabase-config.js"></script><script src="carte.js"></script>
+<script src="supabase-config.js"></script><script src="pays.js"></script><script src="carte.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const POSTES=['Pilier','Talonneur','Deuxième ligne','Troisième ligne aile','Troisième ligne centre','Demi de mêlée',"Demi d'ouverture",'Ailier','Centre','Arrière'];
@@ -57,47 +57,64 @@ function dateISO(s){s=String(s||'').trim();if(!s)return '';let m;
   if(/^\d{4}$/.test(s))return s+'-01-01';return ''}
 const num=s=>{const v=parseFloat(String(s==null?'':s).replace(',','.'));return isFinite(v)?v:null};
 const PM={},FM={};POSTES.forEach(p=>PM[norm(p)]=p);PROFILS.forEach(p=>FM[norm(p)]=p);
+const ALIAS_POSTE={'pilier gauche':'Pilier','pilier droit':'Pilier'},A_PRECISER={'premiere ligne':1,'troisieme ligne':1};
 let BASE=[],VUE=[],PAGE=0;const PAR=50;
 function lire(txt){
-  const rows=parseCSV(txt),erreurs=[],joueurs=[];if(rows.length<2)return{joueurs,erreurs:['Fichier vide ou sans ligne de joueur.'],manq:[]};
-  const head=rows[0].map(norm),ix=k=>head.indexOf(k),req=['id','nom','poste','date de naissance','nationalite'],manq=req.filter(k=>ix(k)<0);
-  if(manq.length)return{joueurs,erreurs:['Colonnes manquantes : '+manq.join(', ')+'.'],manq};
-  const g=(r,k)=>ix(k)<0?'':String(r[ix(k)]==null?'':r[ix(k)]).trim(),ids=new Set(),inconnus={};
-  rows.slice(1).forEach((r,n)=>{const L=n+2,err=m=>{if(erreurs.length<400)erreurs.push(`Ligne ${L} : ${m}`);ok=false};let ok=true;
-    const id=g(r,'id'),nom=g(r,'nom'),po=PM[norm(g(r,'poste'))],nai=dateISO(g(r,'date de naissance')),nat=g(r,'nationalite');
-    if(!id)err('identifiant vide');else if(ids.has(id))err('identifiant en double ('+id+')');
-    if(!nom)err('nom vide');if(!po){err('poste inconnu « '+g(r,'poste')+' »');inconnus[g(r,'poste')]=(inconnus[g(r,'poste')]||0)+1}
-    if(!nai)err('date de naissance absente ou illisible « '+g(r,'date de naissance')+' »');
-    const pf=FM[norm(g(r,'profil'))],st={};let aC=!pf;
-    if(pf){STATS.forEach(([lab,k])=>{const v=num(g(r,lab.toLowerCase()==='mélée'?'melee':norm(lab)));if(!(v>=1&&v<=100)){err(`statistique « ${lab} » invalide « ${g(r,norm(lab))} » (1 à 100)`)}st[k]=v==null?null:Math.round(v)})}
-    else STATS.forEach(([l,k])=>st[k]=null);
-    if(!ok)return;ids.add(id);
-    joueurs.push({id,nom,nai,poste:po,nat,profil:pf||'',aC,note:aC?null:Math.round(num(g(r,'note globale'))||num(g(r,'note attribuee'))||0)||null,st,spec:g(r,'specialite'),poids:num(g(r,'poids')),taille:num(g(r,'taille')),photo:g(r,'photo'),nomN:norm(nom)})});
-  return{joueurs,erreurs,manq:[],inconnus,total:rows.length-1}}
+  const rows=parseCSV(txt);if(rows.length<2)return{joueurs:[],avis:{'Fichier vide ou sans ligne de joueur':{n:1,ex:[],type:'exclu'}},total:0};
+  const head=rows[0].map(norm),ix=k=>head.indexOf(k),manq=['id','nom','poste'].filter(k=>ix(k)<0);
+  if(manq.length)return{joueurs:[],avis:{['Colonnes manquantes : '+manq.join(', ')]:{n:1,ex:[],type:'exclu'}},total:0};
+  const g=(r,k)=>ix(k)<0?'':String(r[ix(k)]==null?'':r[ix(k)]).trim(),ids=new Set(),joueurs=[],avis={};
+  const av=(cat,type,nom)=>{const a=avis[cat]||(avis[cat]={n:0,ex:[],type});a.n++;if(a.ex.length<3&&nom)a.ex.push(nom)};
+  rows.slice(1).forEach((r,n)=>{
+    const id=g(r,'id'),nom=g(r,'nom');
+    if(!id){av('Identifiant vide','exclu','ligne '+(n+2));return}if(ids.has(id)){av('Identifiant en double (ligne ignorée)','exclu',id);return}if(!nom){av('Nom vide','exclu',id);return}ids.add(id);
+    const pb=g(r,'poste'),pn=norm(pb);let po=PM[pn]||ALIAS_POSTE[pn]||'';
+    if(ALIAS_POSTE[pn])av('Poste regroupé automatiquement (Pilier gauche ou droit → Pilier)','corrige',nom);
+    if(!po)av(A_PRECISER[pn]?`Poste à préciser : « ${pb} »`:`Poste inconnu : « ${pb||'(vide)'} »`,'reserve',nom);
+    const nb=g(r,'date de naissance');let nai=dateISO(nb);
+    if(!nb||/^n\/?d$/i.test(nb))av('Date de naissance absente (N/D)','reserve',nom);else if(!nai)av('Date de naissance illisible','reserve',nom);
+    else{const a=+nai.slice(0,4);if(a<1940||a>2015){av('Date de naissance aberrante (ignorée)','reserve',`${nom} (${nai.slice(0,4)})`);nai=''}}
+    const brute=g(r,'nationalite'),pa=pays(brute);
+    if(pa.vide)av('Nationalité absente (N/D)','reserve',nom);else if(!pa.reconnu)av('Nationalité non reconnue','reserve',brute);else if(pa.multiple)av('Plusieurs nationalités : la première est retenue','corrige',brute);
+    const pfb=g(r,'profil'),pf=FM[norm(pfb)];
+    if(pfb&&!pf&&norm(pfb)!=='niveau inconnu')av(`Profil non reconnu : « ${pfb} »`,'reserve',nom);
+    const raws=STATS.map(([l])=>g(r,norm(l))),vals=raws.map(num),ok=vals.every(v=>v!=null&&v>=1&&v<=100),st={};let aC=!pf,note=null;
+    STATS.forEach(([l,k],i)=>st[k]=null);
+    if(pf){if(ok){STATS.forEach(([l,k],i)=>st[k]=Math.round(vals[i]));note=Math.round(num(g(r,'note globale'))||num(g(r,'note attribuee'))||0)||null}
+      else{aC=true;av(raws.some(x=>x.startsWith('#'))?'Statistiques en erreur (#REF!) : joueur à classer':vals.some(v=>v==null)?'Profil sans statistiques (formules à étendre dans Excel) : joueur à classer':'Statistiques hors de 1 à 100 : joueur à classer','reserve',nom)}}
+    else if(vals.some(v=>v!=null))av('Statistiques présentes mais sans profil (ignorées)','reserve',nom);
+    let ph=g(r,'photo');if(/\/_ipx\//.test(ph)&&/https?:\/\/.+https?:\/\//.test(ph)){ph=ph.slice(ph.lastIndexOf('http'));av('Lien photo simplifié (partie « _ipx » retirée)','corrige',nom)}
+    const poids=num(g(r,'poids')),taille=num(g(r,'taille'));
+    if(poids==null)av('Poids absent','reserve',nom);else if(poids<55||poids>160)av('Poids douteux','reserve',`${nom} (${poids} kg)`);
+    if(taille==null)av('Taille absente','reserve',nom);else if(taille<150||taille>215)av('Taille douteuse','reserve',`${nom} (${taille} cm)`);
+    joueurs.push({id,nom,nai,poste:po,posteBrut:pb,nat:pa.nom,natBrute:brute,club:g(r,'club actuel')||g(r,'club'),profil:pf||'',aC,note,st,spec:g(r,'specialite'),poids,taille,photo:ph,nomN:norm(nom)})});
+  return{joueurs,avis,total:rows.length-1}}
+const TYPES={exclu:['Ligne ignorée','#7a2a2a'],reserve:['Importé avec réserve','#7a5a1f'],corrige:['Corrigé automatiquement','#1f5a43']};
 $('f').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const t0=performance.now(),res=lire(decoder(r.result));BASE=res.joueurs;
-  const nb=res.joueurs.length,aC=BASE.filter(j=>j.aC).length,ms=Math.round(performance.now()-t0);
-  $('rapport').innerHTML=(nb?`<div class="ok"><b>${nb.toLocaleString('fr')}</b> joueur(s) valide(s) sur ${(res.total||0).toLocaleString('fr')} ligne(s) lues (${ms} ms). <b>${aC.toLocaleString('fr')}</b> à classer, ${(nb-aC).toLocaleString('fr')} avec profil.</div>`:'')+
-   (res.erreurs.length?`<div class="warn"><b>${res.erreurs.length>=400?'Plus de 400':res.erreurs.length} problème(s)</b> : ces lignes sont ignorées.<ul style="margin:6px 0 0;padding-left:18px">${res.erreurs.slice(0,40).map(x=>`<li>${esc(x)}</li>`).join('')}</ul>${res.erreurs.length>40?'<p class="note">… affichage limité aux 40 premiers.</p>':''}${res.inconnus&&Object.keys(res.inconnus).length?`<p class="note">Postes inconnus (valeurs et nombre de lignes) : ${Object.entries(res.inconnus).slice(0,15).map(([k,v])=>esc(k||'(vide)')+' → '+v).join(' · ')}. Postes attendus : ${POSTES.join(', ')}.</p>`:''}</div>`:'');
-  $('s-liste').hidden=$('s-export').hidden=!nb;if(nb){const cnt=(f)=>{const m={};BASE.forEach(j=>{const k=f(j);m[k]=(m[k]||0)+1});return m};
-    const opt=(m,tous,ordre)=>`<option value="">${tous}</option>`+(ordre||Object.keys(m).sort((a,b)=>a.localeCompare(b,'fr'))).filter(k=>m[k]!=null).map(k=>`<option value="${esc(k)}">${esc(k||'(vide)')} (${m[k].toLocaleString('fr')})</option>`).join('');
-    $('f-poste').innerHTML=opt(cnt(j=>j.poste),'Tous les postes',POSTES);$('f-nat').innerHTML=opt(cnt(j=>j.nat),'Toutes les nationalités');
-    const mp=cnt(j=>j.aC?'À classer':j.profil);$('f-profil').innerHTML=opt(mp,'Tous les profils',['À classer',...PROFILS]);appliquer()}};r.readAsArrayBuffer(f)};
-const age=n=>Math.floor((Date.now()-new Date(n))/31557600000);
-function appliquer(){PAGE=0;const nom=norm($('f-nom').value),a1=+$('f-a1').value||0,a2=+$('f-a2').value||9999,po=$('f-poste').value,na=$('f-nat').value,pf=$('f-profil').value,tri=$('f-tri').value;
-  VUE=BASE.filter(j=>{const a=+j.nai.slice(0,4);return(!nom||j.nomN.includes(nom))&&a>=a1&&a<=a2&&(!po||j.poste===po)&&(!na||j.nat===na)&&(!pf||(pf==='À classer'?j.aC:j.profil===pf))});
-  const cmp={nom:(x,y)=>x.nomN.localeCompare(y.nomN,'fr'),nai:(x,y)=>x.nai.localeCompare(y.nai),'nai-':(x,y)=>y.nai.localeCompare(x.nai),nat:(x,y)=>x.nat.localeCompare(y.nat,'fr')||x.nomN.localeCompare(y.nomN,'fr'),poste:(x,y)=>POSTES.indexOf(x.poste)-POSTES.indexOf(y.poste)||x.nomN.localeCompare(y.nomN,'fr'),'note-':(x,y)=>(y.note||0)-(x.note||0)}[tri];VUE.sort(cmp);rendre()}
+  const nb=BASE.length,aC=BASE.filter(j=>j.aC).length,ms=Math.round(performance.now()-t0),L=n=>n.toLocaleString('fr');
+  const lignes=Object.entries(res.avis).sort((a,b)=>Object.keys(TYPES).indexOf(a[1].type)-Object.keys(TYPES).indexOf(b[1].type)||b[1].n-a[1].n);
+  $('rapport').innerHTML=(nb?`<div class="ok"><b>${L(nb)}</b> joueur(s) retenu(s) sur ${L(res.total)} ligne(s) lues (${ms} ms) : <b>${L(nb-aC)}</b> avec profil et statistiques, <b>${L(aC)}</b> à classer.</div>`:'')+
+   (lignes.length?`<div class="wrap"><table><tr><th>Constat</th><th>Problème</th><th>Lignes</th><th>Exemples</th></tr>${lignes.map(([c,a])=>`<tr><td><span class="tag" style="background:${TYPES[a.type][1]}">${TYPES[a.type][0]}</span></td><td style="white-space:normal">${esc(c)}</td><td>${L(a.n)}</td><td style="white-space:normal;opacity:.8">${a.ex.map(esc).join(' · ')}</td></tr>`).join('')}</table></div>`:'');
+  $('s-liste').hidden=$('s-export').hidden=!nb;if(nb){const cnt=f=>{const m={};BASE.forEach(j=>{const k=f(j);m[k]=(m[k]||0)+1});return m};
+    const opt=(m,tous,ordre)=>`<option value="">${tous}</option>`+(ordre||Object.keys(m).sort((a,b)=>a.localeCompare(b,'fr'))).filter(k=>m[k]!=null).map(k=>`<option value="${esc(k)}">${esc(k)} (${m[k].toLocaleString('fr')})</option>`).join('');
+    $('f-poste').innerHTML=opt(cnt(j=>j.poste||'(à préciser)'),'Tous les postes',[...POSTES,'(à préciser)']);$('f-club').innerHTML=opt(cnt(j=>j.club||'(sans club)'),'Tous les clubs');$('f-nat').innerHTML=opt(cnt(j=>j.nat||'(inconnue)'),'Toutes les nationalités');
+    $('f-profil').innerHTML=opt(cnt(j=>j.aC?'À classer':j.profil),'Tous les profils',['À classer',...PROFILS]);appliquer()}};r.readAsArrayBuffer(f)};
+const age=n=>n?Math.floor((Date.now()-new Date(n))/31557600000):null;
+function appliquer(){PAGE=0;const nom=norm($('f-nom').value),a1=+$('f-a1').value||0,a2=+$('f-a2').value||9999,po=$('f-poste').value,cl=$('f-club').value,na=$('f-nat').value,pf=$('f-profil').value,tri=$('f-tri').value;
+  VUE=BASE.filter(j=>{const a=j.nai?+j.nai.slice(0,4):null;return(!nom||j.nomN.includes(nom))&&((!a1&&a2===9999)||(a!=null&&a>=a1&&a<=a2))&&(!po||(j.poste||'(à préciser)')===po)&&(!cl||(j.club||'(sans club)')===cl)&&(!na||(j.nat||'(inconnue)')===na)&&(!pf||(pf==='À classer'?j.aC:j.profil===pf))});
+  const nm=(x,y)=>x.nomN.localeCompare(y.nomN,'fr');const cmp={nom:nm,nai:(x,y)=>(x.nai||'9').localeCompare(y.nai||'9'),'nai-':(x,y)=>(y.nai||'0').localeCompare(x.nai||'0'),nat:(x,y)=>x.nat.localeCompare(y.nat,'fr')||nm(x,y),poste:(x,y)=>POSTES.indexOf(x.poste)-POSTES.indexOf(y.poste)||nm(x,y),'note-':(x,y)=>(y.note||0)-(x.note||0)}[tri];VUE.sort(cmp);rendre()}
 function rendre(){const nbp=Math.max(1,Math.ceil(VUE.length/PAR));PAGE=Math.min(PAGE,nbp-1);
   $('compte').innerHTML=`<b>${VUE.length.toLocaleString('fr')}</b> joueur(s) correspondent sur ${BASE.length.toLocaleString('fr')}.`;
-  $('t').innerHTML='<tr><th>Nom</th><th>Naissance</th><th>Poste</th><th>Nationalité</th><th>Profil</th><th>Note</th></tr>'+VUE.slice(PAGE*PAR,PAGE*PAR+PAR).map((j,n)=>`<tr><td><a href="#" class="lien" data-i="${PAGE*PAR+n}">${esc(j.nom)}</a></td><td>${esc(j.nai)} <span class="tag">${age(j.nai)} ans</span></td><td>${esc(j.poste)}</td><td>${esc(j.nat)}</td><td${j.aC?' class="cl"':''}>${j.aC?'À classer':esc(j.profil)}</td><td>${j.note==null?'':j.note}</td></tr>`).join('');
+  $('t').innerHTML='<tr><th>Nom</th><th>Naissance</th><th>Poste</th><th>Club</th><th>Nationalité</th><th>Profil</th><th>Note</th></tr>'+VUE.slice(PAGE*PAR,PAGE*PAR+PAR).map((j,n)=>`<tr><td><a href="#" class="lien" data-i="${PAGE*PAR+n}">${esc(j.nom)}</a></td><td>${j.nai?esc(j.nai)+' <span class="tag">'+age(j.nai)+' ans</span>':'<span style="opacity:.5">—</span>'}</td><td${j.poste?'':' class="cl"'}>${j.poste?esc(j.poste):esc(j.posteBrut||'?')+' ?'}</td><td>${esc(j.club)}</td><td>${j.nat?esc(j.nat):'<span style="opacity:.5">—</span>'}</td><td${j.aC?' class="cl"':''}>${j.aC?'À classer':esc(j.profil)}</td><td>${j.note==null?'':j.note}</td></tr>`).join('');
   $('page').textContent=`Page ${PAGE+1} / ${nbp}`;$('prec').disabled=PAGE===0;$('suiv').disabled=PAGE>=nbp-1}
 $('prec').onclick=()=>{PAGE--;rendre()};$('suiv').onclick=()=>{PAGE++;rendre()};
-['f-poste','f-nat','f-profil','f-tri','f-a1','f-a2'].forEach(i=>$(i).onchange=appliquer);let tm;$('f-nom').oninput=()=>{clearTimeout(tm);tm=setTimeout(appliquer,150)};
-$('f-raz').onclick=()=>{['f-nom','f-a1','f-a2','f-poste','f-nat','f-profil'].forEach(i=>$(i).value='');appliquer()};
+['f-poste','f-club','f-nat','f-profil','f-tri','f-a1','f-a2'].forEach(i=>$(i).onchange=appliquer);let tm;$('f-nom').oninput=()=>{clearTimeout(tm);tm=setTimeout(appliquer,150)};
+$('f-raz').onclick=()=>{['f-nom','f-a1','f-a2','f-poste','f-club','f-nat','f-profil'].forEach(i=>$(i).value='');appliquer()};
 const q=v=>{v=v==null?'':String(v);return /[,;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 function telecharger(nom,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download=nom;a.click()}
-$('ex-sup').onclick=()=>{const H=['id','nom','naissance','poste','nationalite','profil','note',...STATS.map(s=>s[1]),'specialite','poids','taille','photo','legende'],lot=+$('lot').value||VUE.length||1,nb=Math.ceil(VUE.length/lot);
-  for(let p=0;p<nb;p++)setTimeout(()=>telecharger(nb>1?`joueurs-v2-partie-${p+1}-sur-${nb}.csv`:'joueurs-v2.csv',[H.join(',')].concat(VUE.slice(p*lot,p*lot+lot).map(j=>[j.id,j.nom,j.nai,j.poste,j.nat,j.profil,j.note,...STATS.map(s=>j.st[s[1]]),j.spec,j.poids,j.taille,j.photo,'false'].map(q).join(','))).join('\n')+'\n'),p*500)};
-$('ex-xl').onclick=()=>telecharger('joueurs-liste.csv','\uFEFF'+['id;nom;naissance;poste;nationalite;profil;note'].concat(VUE.map(j=>[j.id,j.nom,j.nai,j.poste,j.nat,j.aC?'':j.profil,j.note].map(v=>{v=v==null?'':String(v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(';'))).join('\r\n')+'\r\n');
+$('ex-sup').onclick=()=>{const H=['id','nom','naissance','poste','poste_brut','club','nationalite','profil','note',...STATS.map(s=>s[1]),'specialite','poids','taille','photo','legende'],lot=+$('lot').value||VUE.length||1,nb=Math.ceil(VUE.length/lot);
+  for(let p=0;p<nb;p++)setTimeout(()=>telecharger(nb>1?`joueurs-v2-partie-${p+1}-sur-${nb}.csv`:'joueurs-v2.csv',[H.join(',')].concat(VUE.slice(p*lot,p*lot+lot).map(j=>[j.id,j.nom,j.nai,j.poste,j.posteBrut,j.club,j.nat,j.profil,j.note,...STATS.map(s=>j.st[s[1]]),j.spec,j.poids,j.taille,j.photo,'false'].map(q).join(','))).join('\n')+'\n'),p*500)};
+$('ex-xl').onclick=()=>telecharger('joueurs-liste.csv','\uFEFF'+['id;nom;naissance;poste;club;nationalite;profil;note'].concat(VUE.map(j=>[j.id,j.nom,j.nai,j.poste||j.posteBrut,j.club,j.nat,j.aC?'':j.profil,j.note].map(v=>{v=v==null?'':String(v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(';'))).join('\r\n')+'\r\n');
 /* ====== CARTE D'UN JOUEUR (clic sur son nom) ====== */
 let CI=-1;
 const fichier=n=>String(n).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'joueur';
