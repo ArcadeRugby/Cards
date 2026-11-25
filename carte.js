@@ -26,7 +26,7 @@ function ajuster(g,txt,max,taille,min,poids){let fs=taille;do{g.font=`${poids||7
 /* dessine la carte du joueur j sur le canvas cv ; renvoie ce qui a été trouvé (photo, drapeau, logo) */
 async function dessinerCarte(cv,j){
   const S=2;cv.width=CARTE_L*S;cv.height=CARTE_H*S;const g=cv.getContext('2d');g.setTransform(S,0,0,S,0,0);
-  const th=THEMES[j.profil]||THEMES.defaut,code=PAYS[j.nat];
+  const th=THEMES[j.profil]||THEMES.defaut,code=(typeof pays==='function'?pays(j.nat).code:PAYS[j.nat]);
   try{await document.fonts.load('700 100px Oswald')}catch(e){}
   const [photo,flag,logo]=await Promise.all([chargerImage(urlsPhoto(j)),code?chargerImage(FLAG_URL.replace('{code}',code)):null,code?chargerImage(urlsLogo(code)):null]);
   g.save();contour(g);g.clip();
