@@ -24,7 +24,7 @@ table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;text-align:left;
 <div class="grid"><label>Nom<input id="f-nom" placeholder="Rechercher un nom"></label>
 <label>Né(e) à partir de (année)<input id="f-a1" type="number" min="1850" max="2100" placeholder="ex. 1990"></label>
 <label>Né(e) jusqu'à (année)<input id="f-a2" type="number" min="1850" max="2100" placeholder="ex. 2000"></label>
-<label>Poste<select id="f-poste"></select></label><label>Club<select id="f-club"></select></label><label>Nationalité<select id="f-nat"></select></label><label>Profil<select id="f-profil"></select></label>
+<label>Poste<select id="f-poste"></select></label><label>Club<select id="f-club"></select></label><label>Rareté<select id="f-rar"></select></label><label>Nationalité<select id="f-nat"></select></label><label>Profil<select id="f-profil"></select></label>
 <label>Trier par<select id="f-tri"><option value="nom">Nom</option><option value="nai-">Naissance (plus récents d'abord)</option><option value="nai">Naissance (plus anciens d'abord)</option><option value="nat">Nationalité</option><option value="poste">Poste</option><option value="note-">Note (plus hautes d'abord)</option></select></label>
 <label>&nbsp;<button class="sec" id="f-raz">Effacer les filtres</button></label></div>
 <p id="compte" style="margin:10px 0 6px"></p>
@@ -58,6 +58,7 @@ function dateISO(s){s=String(s||'').trim();if(!s)return '';let m;
 const num=s=>{const v=parseFloat(String(s==null?'':s).replace(',','.'));return isFinite(v)?v:null};
 const PM={},FM={};POSTES.forEach(p=>PM[norm(p)]=p);PROFILS.forEach(p=>FM[norm(p)]=p);
 const ALIAS_POSTE={'pilier gauche':'Pilier','pilier droit':'Pilier'},A_PRECISER={'premiere ligne':1,'troisieme ligne':1};
+const RAR={commun:'commun',commune:'commun',rare:'rare',epique:'epique',legendaire:'legendaire'},RLAB={commun:'Commune',rare:'Rare',epique:'Épique',legendaire:'Légendaire'};
 let BASE=[],VUE=[],PAGE=0;const PAR=50;
 function lire(txt){
   const rows=parseCSV(txt);if(rows.length<2)return{joueurs:[],avis:{'Fichier vide ou sans ligne de joueur':{n:1,ex:[],type:'exclu'}},total:0};
@@ -78,6 +79,7 @@ function lire(txt){
     if(pa.vide)av('Nationalité absente (N/D)','reserve',nom);else if(!pa.reconnu)av('Nationalité non reconnue','reserve',brute);else if(pa.multiple)av('Plusieurs nationalités : la première est retenue','corrige',brute);
     const pfb=g(r,'profil'),pf=FM[norm(pfb)];
     if(pfb&&!pf&&norm(pfb)!=='niveau inconnu')av(`Profil non reconnu : « ${pfb} »`,'reserve',nom);
+    const rb=g(r,'rarete'),rk=RAR[norm(rb)]||'';if(rb&&!rk)av(`Rareté non reconnue : « ${rb} » (attendu : Commune, Rare, Épique, Légendaire)`,'reserve',nom);
     const raws=STATS.map(([l])=>g(r,norm(l))),vals=raws.map(num),ok=vals.every(v=>v!=null&&v>=1&&v<=100),st={};let aC=!pf,note=null;
     STATS.forEach(([l,k],i)=>st[k]=null);
     if(pf){if(ok){STATS.forEach(([l,k],i)=>st[k]=Math.round(vals[i]));note=Math.round(num(g(r,'note globale'))||num(g(r,'note attribuee'))||0)||null}
@@ -87,7 +89,7 @@ function lire(txt){
     const poids=num(g(r,'poids')),taille=num(g(r,'taille'));
     if(poids==null)av('Poids absent','reserve',nom);else if(poids<55||poids>160)av('Poids douteux','reserve',`${nom} (${poids} kg)`);
     if(taille==null)av('Taille absente','reserve',nom);else if(taille<150||taille>215)av('Taille douteuse','reserve',`${nom} (${taille} cm)`);
-    joueurs.push({id,nom,nai,poste:po,posteBrut:pb,nat:pa.nom,natBrute:brute,club:g(r,'club actuel')||g(r,'club'),profil:pf||'',aC,note,st,spec:g(r,'specialite'),poids,taille,photo:ph,nomN:norm(nom)})});
+    joueurs.push({id,nom,nai,poste:po,posteBrut:pb,nat:pa.nom,natBrute:brute,club:g(r,'club actuel')||g(r,'club'),profil:pf||'',rarete:rk,aC,note,st,spec:g(r,'specialite'),poids,taille,photo:ph,nomN:norm(nom)})});
   return{joueurs,avis,total:rows.length-1}}
 const TYPES={exclu:['Ligne ignorée','#7a2a2a'],reserve:['Importé avec réserve','#7a5a1f'],corrige:['Corrigé automatiquement','#1f5a43']};
 $('f').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const t0=performance.now(),res=lire(decoder(r.result));BASE=res.joueurs;
@@ -98,29 +100,30 @@ $('f').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReade
   $('s-liste').hidden=$('s-export').hidden=!nb;if(nb){const cnt=f=>{const m={};BASE.forEach(j=>{const k=f(j);m[k]=(m[k]||0)+1});return m};
     const opt=(m,tous,ordre)=>`<option value="">${tous}</option>`+(ordre||Object.keys(m).sort((a,b)=>a.localeCompare(b,'fr'))).filter(k=>m[k]!=null).map(k=>`<option value="${esc(k)}">${esc(k)} (${m[k].toLocaleString('fr')})</option>`).join('');
     $('f-poste').innerHTML=opt(cnt(j=>j.poste||'(à préciser)'),'Tous les postes',[...POSTES,'(à préciser)']);$('f-club').innerHTML=opt(cnt(j=>j.club||'(sans club)'),'Tous les clubs');$('f-nat').innerHTML=opt(cnt(j=>j.nat||'(inconnue)'),'Toutes les nationalités');
-    $('f-profil').innerHTML=opt(cnt(j=>j.aC?'À classer':j.profil),'Tous les profils',['À classer',...PROFILS]);appliquer()}};r.readAsArrayBuffer(f)};
+    $('f-profil').innerHTML=opt(cnt(j=>j.aC?'À classer':j.profil),'Tous les profils',['À classer',...PROFILS]);
+    const mr=cnt(j=>j.rarete||'aucune');$('f-rar').innerHTML='<option value="">Toutes les raretés</option>'+['commun','rare','epique','legendaire','aucune'].filter(k=>mr[k]).map(k=>`<option value="${k}">${k==='aucune'?'(non renseignée)':RLAB[k]} (${mr[k].toLocaleString('fr')})</option>`).join('');appliquer()}};r.readAsArrayBuffer(f)};
 const age=n=>n?Math.floor((Date.now()-new Date(n))/31557600000):null;
-function appliquer(){PAGE=0;const nom=norm($('f-nom').value),a1=+$('f-a1').value||0,a2=+$('f-a2').value||9999,po=$('f-poste').value,cl=$('f-club').value,na=$('f-nat').value,pf=$('f-profil').value,tri=$('f-tri').value;
-  VUE=BASE.filter(j=>{const a=j.nai?+j.nai.slice(0,4):null;return(!nom||j.nomN.includes(nom))&&((!a1&&a2===9999)||(a!=null&&a>=a1&&a<=a2))&&(!po||(j.poste||'(à préciser)')===po)&&(!cl||(j.club||'(sans club)')===cl)&&(!na||(j.nat||'(inconnue)')===na)&&(!pf||(pf==='À classer'?j.aC:j.profil===pf))});
+function appliquer(){PAGE=0;const nom=norm($('f-nom').value),a1=+$('f-a1').value||0,a2=+$('f-a2').value||9999,po=$('f-poste').value,cl=$('f-club').value,na=$('f-nat').value,pf=$('f-profil').value,ra=$('f-rar').value,tri=$('f-tri').value;
+  VUE=BASE.filter(j=>{const a=j.nai?+j.nai.slice(0,4):null;return(!nom||j.nomN.includes(nom))&&((!a1&&a2===9999)||(a!=null&&a>=a1&&a<=a2))&&(!po||(j.poste||'(à préciser)')===po)&&(!cl||(j.club||'(sans club)')===cl)&&(!na||(j.nat||'(inconnue)')===na)&&(!pf||(pf==='À classer'?j.aC:j.profil===pf))&&(!ra||(j.rarete||'aucune')===ra)});
   const nm=(x,y)=>x.nomN.localeCompare(y.nomN,'fr');const cmp={nom:nm,nai:(x,y)=>(x.nai||'9').localeCompare(y.nai||'9'),'nai-':(x,y)=>(y.nai||'0').localeCompare(x.nai||'0'),nat:(x,y)=>x.nat.localeCompare(y.nat,'fr')||nm(x,y),poste:(x,y)=>POSTES.indexOf(x.poste)-POSTES.indexOf(y.poste)||nm(x,y),'note-':(x,y)=>(y.note||0)-(x.note||0)}[tri];VUE.sort(cmp);rendre()}
 function rendre(){const nbp=Math.max(1,Math.ceil(VUE.length/PAR));PAGE=Math.min(PAGE,nbp-1);
   $('compte').innerHTML=`<b>${VUE.length.toLocaleString('fr')}</b> joueur(s) correspondent sur ${BASE.length.toLocaleString('fr')}.`;
-  $('t').innerHTML='<tr><th>Nom</th><th>Naissance</th><th>Poste</th><th>Club</th><th>Nationalité</th><th>Profil</th><th>Note</th></tr>'+VUE.slice(PAGE*PAR,PAGE*PAR+PAR).map((j,n)=>`<tr><td><a href="#" class="lien" data-i="${PAGE*PAR+n}">${esc(j.nom)}</a></td><td>${j.nai?esc(j.nai)+' <span class="tag">'+age(j.nai)+' ans</span>':'<span style="opacity:.5">—</span>'}</td><td${j.poste?'':' class="cl"'}>${j.poste?esc(j.poste):esc(j.posteBrut||'?')+' ?'}</td><td>${esc(j.club)}</td><td>${j.nat?esc(j.nat):'<span style="opacity:.5">—</span>'}</td><td${j.aC?' class="cl"':''}>${j.aC?'À classer':esc(j.profil)}</td><td>${j.note==null?'':j.note}</td></tr>`).join('');
+  $('t').innerHTML='<tr><th>Nom</th><th>Naissance</th><th>Poste</th><th>Club</th><th>Nationalité</th><th>Profil</th><th>Rareté</th><th>Note</th></tr>'+VUE.slice(PAGE*PAR,PAGE*PAR+PAR).map((j,n)=>`<tr><td><a href="#" class="lien" data-i="${PAGE*PAR+n}">${esc(j.nom)}</a></td><td>${j.nai?esc(j.nai)+' <span class="tag">'+age(j.nai)+' ans</span>':'<span style="opacity:.5">—</span>'}</td><td${j.poste?'':' class="cl"'}>${j.poste?esc(j.poste):esc(j.posteBrut||'?')+' ?'}</td><td>${esc(j.club)}</td><td>${j.nat?esc(j.nat):'<span style="opacity:.5">—</span>'}</td><td${j.aC?' class="cl"':''}>${j.aC?'À classer':esc(j.profil)}</td><td>${j.rarete?RLAB[j.rarete]:'<span style="opacity:.5">—</span>'}</td><td>${j.note==null?'':j.note}</td></tr>`).join('');
   $('page').textContent=`Page ${PAGE+1} / ${nbp}`;$('prec').disabled=PAGE===0;$('suiv').disabled=PAGE>=nbp-1}
 $('prec').onclick=()=>{PAGE--;rendre()};$('suiv').onclick=()=>{PAGE++;rendre()};
-['f-poste','f-club','f-nat','f-profil','f-tri','f-a1','f-a2'].forEach(i=>$(i).onchange=appliquer);let tm;$('f-nom').oninput=()=>{clearTimeout(tm);tm=setTimeout(appliquer,150)};
-$('f-raz').onclick=()=>{['f-nom','f-a1','f-a2','f-poste','f-club','f-nat','f-profil'].forEach(i=>$(i).value='');appliquer()};
+['f-poste','f-club','f-rar','f-nat','f-profil','f-tri','f-a1','f-a2'].forEach(i=>$(i).onchange=appliquer);let tm;$('f-nom').oninput=()=>{clearTimeout(tm);tm=setTimeout(appliquer,150)};
+$('f-raz').onclick=()=>{['f-nom','f-a1','f-a2','f-poste','f-club','f-rar','f-nat','f-profil'].forEach(i=>$(i).value='');appliquer()};
 const q=v=>{v=v==null?'':String(v);return /[,;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 function telecharger(nom,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download=nom;a.click()}
-$('ex-sup').onclick=()=>{const H=['id','nom','naissance','poste','poste_brut','club','nationalite','profil','note',...STATS.map(s=>s[1]),'specialite','poids','taille','photo','legende'],lot=+$('lot').value||VUE.length||1,nb=Math.ceil(VUE.length/lot);
-  for(let p=0;p<nb;p++)setTimeout(()=>telecharger(nb>1?`joueurs-v2-partie-${p+1}-sur-${nb}.csv`:'joueurs-v2.csv',[H.join(',')].concat(VUE.slice(p*lot,p*lot+lot).map(j=>[j.id,j.nom,j.nai,j.poste,j.posteBrut,j.club,j.nat,j.profil,j.note,...STATS.map(s=>j.st[s[1]]),j.spec,j.poids,j.taille,j.photo,'false'].map(q).join(','))).join('\n')+'\n'),p*500)};
+$('ex-sup').onclick=()=>{const H=['id','nom','naissance','poste','poste_brut','club','nationalite','profil','rarete','note',...STATS.map(s=>s[1]),'specialite','poids','taille','photo','legende'],lot=+$('lot').value||VUE.length||1,nb=Math.ceil(VUE.length/lot);
+  for(let p=0;p<nb;p++)setTimeout(()=>telecharger(nb>1?`joueurs-v2-partie-${p+1}-sur-${nb}.csv`:'joueurs-v2.csv',[H.join(',')].concat(VUE.slice(p*lot,p*lot+lot).map(j=>[j.id,j.nom,j.nai,j.poste,j.posteBrut,j.club,j.nat,j.profil,j.rarete,j.note,...STATS.map(s=>j.st[s[1]]),j.spec,j.poids,j.taille,j.photo,'false'].map(q).join(','))).join('\n')+'\n'),p*500)};
 $('ex-xl').onclick=()=>telecharger('joueurs-liste.csv','\uFEFF'+['id;nom;naissance;poste;club;nationalite;profil;note'].concat(VUE.map(j=>[j.id,j.nom,j.nai,j.poste||j.posteBrut,j.club,j.nat,j.aC?'':j.profil,j.note].map(v=>{v=v==null?'':String(v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(';'))).join('\r\n')+'\r\n');
 /* ====== CARTE D'UN JOUEUR (clic sur son nom) ====== */
 let CI=-1;
 const fichier=n=>String(n).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'joueur';
 async function ouvrirCarte(i){if(i<0||i>=VUE.length)return;CI=i;const j=VUE[i];$('fond').classList.add('on');$('c-info').textContent='Création de la carte…';
   const r=await dessinerCarte($('carte'),j);if(CI!==i)return;$('c-dl').disabled=!r.exportable;
-  $('c-info').innerHTML=`${esc(j.nom)} · ${i+1} / ${VUE.length.toLocaleString('fr')} · photo : ${r.photo?'trouvée':'<b style="color:#ffb86b">introuvable</b> (silhouette affichée)'} · drapeau : ${r.flag?'ok':'absent'} · logo : ${r.logo?'ok':'absent'}`+(r.exportable?'':'<br><b style="color:#ffb86b">Téléchargement PNG impossible :</b> une image vient d\'un site qui ne l\'autorise pas. Héberge-la plutôt sur Supabase.')+(r.photo?'':`<br>Ajoute <b>photos/${esc(j.id)}.jpg</b> (ou renseigne la colonne « photo »).`)}
+  $('c-info').innerHTML=`${esc(j.nom)} · ${i+1} / ${VUE.length.toLocaleString('fr')} · photo : ${r.photo?'trouvée':'<b style="color:#ffb86b">introuvable</b> (silhouette affichée)'} · drapeau : ${r.flag?'ok':'absent'} · logo : ${r.logo?'ok':'absent'}`+(r.exportable?'':'<br><b style="color:#ffb86b">Téléchargement PNG impossible :</b> une image vient d\'un site qui ne l\'autorise pas. Héberge-la plutôt sur Supabase.')+` · rareté : ${(THEMES[r.rarete]||{}).n||''}`+(r.photo?'':`<br>Ajoute <b>photos/${esc(j.id)}.jpg</b> (ou renseigne la colonne « photo »).`)}
 function fermerCarte(){$('fond').classList.remove('on');CI=-1}
 $('t').addEventListener('click',e=>{const a=e.target.closest('a.lien');if(!a)return;e.preventDefault();ouvrirCarte(+a.dataset.i)});
 $('c-x').onclick=fermerCarte;$('c-prec').onclick=()=>ouvrirCarte(CI-1);$('c-suiv').onclick=()=>ouvrirCarte(CI+1);
